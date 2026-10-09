@@ -90,6 +90,26 @@ class ReplayEngineTest {
     }
 
     @Test
+    fun `rest token earned at 7 completions and auto-used to protect missed day`() {
+        val today = LocalDate.of(2025, 5, 9)
+        // 7 DONE completions -> 1 rest token earned (cap 3)
+        val completions = (1..7).map { day ->
+            LoggedCompletion(habitId = "h1", logicalDate = LocalDate.of(2025, 5, day), state = CompletionState.DONE)
+        }
+
+        // Before miss: on May 8, token available
+        val resultBefore = ReplayEngine.evaluate(defaultHabit, completions, LocalDate.of(2025, 5, 8))
+        assertEquals(1, resultBefore.availableRestTokens)
+        assertEquals(0, resultBefore.restTokenProgress)
+
+        // May 8 missed with autoUse on -> PROTECTED, streak preserved (7+1=8), token decremented (0 available)
+        val resultAfter = ReplayEngine.evaluate(defaultHabit, completions, today, autoUseRestTokens = true)
+        assertEquals(OccurrenceState.PROTECTED, resultAfter.occurrenceStates[LocalDate.of(2025, 5, 8)])
+        assertEquals(0, resultAfter.availableRestTokens)
+        assertEquals(8, resultAfter.currentStreak)
+    }
+
+    @Test
     fun `start of week setting affects N_PER_WEEK week boundary in replay`() {
         val habit = Habit(
             id = "h2",
