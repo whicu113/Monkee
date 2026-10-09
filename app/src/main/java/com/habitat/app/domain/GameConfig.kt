@@ -25,4 +25,7 @@ object GameConfig {
 
     /** Maximum allowed lateness (in minutes) for delivering a reminder before dropping it as stale. SPEC 8.1 */
     const val MAX_REMINDER_LATENESS_MINUTES: Long = 120L
+
+    /** Default reminder snooze length in minutes. SPEC 8.1 */
+    const val DEFAULT_SNOOZE_LENGTH_MINUTES: Int = 30
 }
