@@ -10,6 +10,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -59,7 +61,7 @@ import com.habitat.app.domain.model.ScheduleType
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HabitListScreen(
     viewModel: HabitViewModel,
@@ -156,29 +158,39 @@ fun HabitListScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(modifier = Modifier.padding(8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Text(
+                            text = "🛠️ Date: ${uiState.currentLogicalDate}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = "🛠️ Date: ${uiState.currentLogicalDate}",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                OutlinedButton(onClick = { viewModel.shiftDebugTime(days = 1, hours = 0) }) {
-                                    Text("+1d", fontSize = 10.sp)
-                                }
-                                OutlinedButton(onClick = { viewModel.shiftDebugTime(days = 0, hours = 1) }) {
-                                    Text("+1h", fontSize = 10.sp)
-                                }
-                                Button(onClick = { viewModel.resetDebugTime() }) {
-                                    Text("Reset", fontSize = 10.sp)
-                                }
-                                Button(onClick = { viewModel.reconcileNow() }) {
-                                    Text("Reconcile", fontSize = 10.sp)
-                                }
+                            OutlinedButton(onClick = { viewModel.shiftDebugTime(days = 1, hours = 0) }) {
+                                Text("+1d", fontSize = 10.sp)
                             }
+                            OutlinedButton(onClick = { viewModel.shiftDebugTime(days = 0, hours = 1) }) {
+                                Text("+1h", fontSize = 10.sp)
+                            }
+                            Button(onClick = { viewModel.resetDebugTime() }) {
+                                Text("Reset", fontSize = 10.sp)
+                            }
+                            Button(onClick = { viewModel.reconcileNow() }) {
+                                Text("Reconcile", fontSize = 10.sp)
+                            }
+                            Button(onClick = { viewModel.fireRemindersNow() }) {
+                                Text("Fire reminders now", fontSize = 10.sp)
+                            }
+                        }
+                        uiState.debugFireResult?.let { result ->
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Result: $result",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }

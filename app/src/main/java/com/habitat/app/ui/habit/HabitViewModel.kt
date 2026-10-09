@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.SystemAppClock
+import com.habitat.app.domain.logic.FireDecision
 import com.habitat.app.domain.logic.ReminderEngine
 import com.habitat.app.domain.logic.ReplayEngine
 import com.habitat.app.domain.logic.ReplayResult
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -46,7 +48,8 @@ data class HabitListUiState(
     val availableDates: List<LocalDate> = emptyList(),
     val debugShiftedDays: Long = 0,
     val debugShiftedHours: Long = 0,
-    val quietHoursEnabled: Boolean = true
+    val quietHoursEnabled: Boolean = true,
+    val debugFireResult: String? = null
 )
 
 @HiltViewModel
@@ -60,13 +63,15 @@ class HabitViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val selectedDateFlow = MutableStateFlow<LocalDate?>(null)
+    private val debugFireResultFlow = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<HabitListUiState> = combine(
         habitRepository.getActiveHabits(),
         completionRepository.getAllCompletions(),
         settingsRepository.getSettings(),
-        selectedDateFlow
-    ) { habits, completions, settings, customSelectedDate ->
+        selectedDateFlow,
+        debugFireResultFlow
+    ) { habits, completions, settings, customSelectedDate, fireResult ->
         val today = clock.logicalDate()
         val selectedDate = customSelectedDate ?: today
 
@@ -124,7 +129,8 @@ class HabitViewModel @Inject constructor(
             currentLogicalDate = today,
             selectedDate = clampedSelectedDate,
             availableDates = availableDates,
-            quietHoursEnabled = settings.quietHoursEnabled
+            quietHoursEnabled = settings.quietHoursEnabled,
+            debugFireResult = fireResult
         )
     }.stateIn(
         scope = viewModelScope,
@@ -183,6 +189,46 @@ class HabitViewModel @Inject constructor(
         if (clock is SystemAppClock) {
             clock.resetShift()
             selectedDateFlow.value = clock.logicalDate()
+        }
+    }
+
+    fun fireRemindersNow() {
+        viewModelScope.launch {
+            val habits = habitRepository.getActiveHabits().first()
+            val settings = settingsRepository.getSettings().first()
+            val today = clock.logicalDate()
+            val postedIds = settingsRepository.getPostedHabitIds(today.toString())
+            val results = mutableListOf<String>()
+
+            for (habit in habits) {
+                val completions = completionRepository.getCompletionsForHabit(habit.id).first()
+                val isLoggedToday = completions.any { it.logicalDate == today }
+                val scheduledTime = habit.reminderTime ?: clock.zonedDateTime().toLocalTime()
+                val scheduledInstant = java.time.LocalDateTime.of(today, scheduledTime).atZone(clock.zoneId()).toInstant()
+
+                val decision = ReminderEngine.evaluateFireTimeDecision(
+                    habit = habit,
+                    scheduledInstant = scheduledInstant,
+                    nowInstant = clock.instant(),
+                    zoneId = clock.zoneId(),
+                    quietHoursEnabled = settings.quietHoursEnabled,
+                    quietHoursStart = settings.quietHoursStart,
+                    quietHoursEnd = settings.quietHoursEnd,
+                    isLoggedToday = isLoggedToday,
+                    isWeeklyQuotaMet = false,
+                    postedIdsToday = postedIds,
+                    currentLogicalDate = today
+                )
+
+                val summary = when (decision) {
+                    is FireDecision.Post -> "Posted"
+                    is FireDecision.Summary -> "Summary"
+                    is FireDecision.Drop -> "Dropped (${decision.reason})"
+                }
+                results.add("${habit.name}: $summary")
+            }
+
+            debugFireResultFlow.value = if (results.isEmpty()) "No active habits" else results.joinToString(" | ")
         }
     }
 }
