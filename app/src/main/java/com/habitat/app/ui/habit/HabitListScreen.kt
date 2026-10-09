@@ -75,7 +75,7 @@ fun HabitListScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (!isGranted) {
-            // Permanently denied link to settings handled via dialog
+            // Permission denied -> dialog can offer direct link to system settings
         }
     }
 
@@ -232,18 +232,31 @@ fun HabitListScreen(
                             }
                         }
                     ) {
-                        Text("Allow")
+                        Text("Allow Notifications")
                     }
                 },
                 dismissButton = {
                     TextButton(
                         onClick = {
                             showPermissionRationale = false
-                            // Open system settings for permanent denial
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.fromParts("package", context.packageName, null)
+                            // Open App Notification Settings (or Application Details as fallback)
+                            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                }
+                            } else {
+                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                }
                             }
-                            context.startActivity(intent)
+                            try {
+                                context.startActivity(intent)
+                            } catch (_: Exception) {
+                                val fallbackIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                }
+                                context.startActivity(fallbackIntent)
+                            }
                         }
                     ) {
                         Text("System Settings")
