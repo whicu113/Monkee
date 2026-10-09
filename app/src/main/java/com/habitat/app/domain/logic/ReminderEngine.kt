@@ -8,7 +8,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
-import java.time.ZonedDateTime
 import kotlin.math.max
 
 sealed interface ReminderAllocation {
@@ -18,10 +17,30 @@ sealed interface ReminderAllocation {
 
 /**
  * Pure domain engine for calculation of next trigger times, quiet hours deferral,
- * and daily cap allocation.
+ * post eligibility, and daily cap allocation.
  * SPEC Section 8.1.
  */
 object ReminderEngine {
+
+    /**
+     * Determines whether a reminder should be posted for [habit] on [currentLogicalDate].
+     * Suppresses if archived, unknown schedule, not scheduled today, already logged today, or weekly quota met.
+     *
+     * SPEC Section 8.1.
+     */
+    fun shouldPost(
+        habit: Habit,
+        isLoggedToday: Boolean,
+        isWeeklyQuotaMet: Boolean,
+        currentLogicalDate: LocalDate
+    ): Boolean {
+        if (habit.archived) return false
+        if (habit.schedule is ScheduleType.Unknown) return false
+        if (!ScheduleEvaluator.isScheduledOn(habit.schedule, currentLogicalDate)) return false
+        if (isLoggedToday) return false
+        if (isWeeklyQuotaMet) return false
+        return true
+    }
 
     /**
      * Calculates the next trigger [Instant] for a single [habit].
@@ -43,7 +62,6 @@ object ReminderEngine {
         val currentZdt = fromInstant.atZone(zoneId)
         val targetDate = currentZdt.toLocalDate()
 
-        // Check up to 365 days ahead for next scheduled occurrence
         for (i in 0..365) {
             val candidateDate = targetDate.plusDays(i.toLong())
             if (ScheduleEvaluator.isScheduledOn(habit.schedule, candidateDate)) {
@@ -108,7 +126,6 @@ object ReminderEngine {
             return sorted.map { ReminderAllocation.Individual(it) }
         }
 
-        // Needs summary: reserve 1 slot for summary notification if capacity allows
         val individualSlots = max(0, availableCapacity - 1)
         val result = mutableListOf<ReminderAllocation>()
 

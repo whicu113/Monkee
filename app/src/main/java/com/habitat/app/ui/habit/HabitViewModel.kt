@@ -1,5 +1,6 @@
 package com.habitat.app.ui.habit
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.habitat.app.domain.AppClock
@@ -12,7 +13,12 @@ import com.habitat.app.domain.model.LoggedCompletion
 import com.habitat.app.domain.model.OccurrenceState
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
+import com.habitat.app.domain.repository.SettingsRepository
+import com.habitat.app.domain.usecase.LogCompletionUseCase
+import com.habitat.app.platform.NotificationHelper
+import com.habitat.app.platform.ReminderScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,8 +47,11 @@ data class HabitListUiState(
 
 @HiltViewModel
 class HabitViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val habitRepository: HabitRepository,
     private val completionRepository: CompletionRepository,
+    private val settingsRepository: SettingsRepository,
+    private val logCompletionUseCase: LogCompletionUseCase,
     private val clock: AppClock
 ) : ViewModel() {
 
@@ -51,12 +60,12 @@ class HabitViewModel @Inject constructor(
     val uiState: StateFlow<HabitListUiState> = combine(
         habitRepository.getActiveHabits(),
         completionRepository.getAllCompletions(),
+        settingsRepository.getSettings(),
         selectedDateFlow
-    ) { habits, completions, customSelectedDate ->
+    ) { habits, completions, settings, customSelectedDate ->
         val today = clock.logicalDate()
         val selectedDate = customSelectedDate ?: today
 
-        // Restrict backfill to trailing 7 days, block future dates
         val availableDates = (0L..7L).map { today.minusDays(it) }.reversed()
         val clampedSelectedDate = if (selectedDate > today) {
             today
@@ -73,7 +82,10 @@ class HabitViewModel @Inject constructor(
             val replay = ReplayEngine.evaluate(
                 habit = habit,
                 loggedCompletions = habitCompletions,
-                currentLogicalDate = today
+                currentLogicalDate = today,
+                strictStreaks = settings.strictStreaks,
+                autoUseRestTokens = settings.autoUseRestTokens,
+                startOfWeekDay = settings.startOfWeekDay
             )
             val selectedComp = habitCompletions.find { it.logicalDate == clampedSelectedDate }
             val dateState = replay.occurrenceStates[clampedSelectedDate] ?: OccurrenceState.PENDING
@@ -110,35 +122,35 @@ class HabitViewModel @Inject constructor(
     }
 
     fun toggleCheckOff(habitId: String, state: CompletionState, date: LocalDate) {
-        val today = clock.logicalDate()
-        if (date > today) return // Block future logging
-
         viewModelScope.launch {
-            completionRepository.logCompletion(
-                LoggedCompletion(
-                    habitId = habitId,
-                    logicalDate = date,
-                    state = state
-                )
-            )
+            val success = logCompletionUseCase.executeLog(habitId, state, date)
+            if (success) {
+                // In-app logging cancels any active notification and pending snooze
+                NotificationHelper.cancelNotification(context, habitId)
+                ReminderScheduler.cancelAlarm(context, habitId)
+            }
         }
     }
 
     fun removeCompletion(habitId: String, date: LocalDate) {
         viewModelScope.launch {
-            completionRepository.removeCompletion(habitId, date)
+            logCompletionUseCase.executeRemove(habitId, date)
         }
     }
 
     fun saveHabit(habit: Habit) {
         viewModelScope.launch {
             habitRepository.saveHabit(habit)
+            // Reconcile reminders on habit edit/save
+            ReminderScheduler.reconcile(context, habitRepository, completionRepository, clock)
         }
     }
 
     fun archiveHabit(id: String) {
         viewModelScope.launch {
             habitRepository.archiveHabit(id)
+            NotificationHelper.cancelNotification(context, id)
+            ReminderScheduler.cancelAlarm(context, id)
         }
     }
 

@@ -4,8 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.habitat.app.domain.model.CompletionState
-import com.habitat.app.domain.model.LoggedCompletion
-import com.habitat.app.domain.repository.CompletionRepository
+import com.habitat.app.domain.usecase.LogCompletionUseCase
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,14 +14,14 @@ import javax.inject.Inject
 
 /**
  * Background BroadcastReceiver handling notification actions without opening the app UI.
- * Uses goAsync() for background DB writes.
+ * Uses goAsync() for background DB writes via LogCompletionUseCase.
  * SPEC Section 8.1.
  */
 @AndroidEntryPoint
 class NotificationActionReceiver : BroadcastReceiver() {
 
     @Inject
-    lateinit var completionRepository: CompletionRepository
+    lateinit var logCompletionUseCase: LogCompletionUseCase
 
     override fun onReceive(context: Context, intent: Intent) {
         val habitId = intent.getStringExtra(NotificationHelper.EXTRA_HABIT_ID) ?: return
@@ -35,27 +34,16 @@ class NotificationActionReceiver : BroadcastReceiver() {
             try {
                 when (intent.action) {
                     NotificationHelper.ACTION_DONE -> {
-                        completionRepository.logCompletion(
-                            LoggedCompletion(
-                                habitId = habitId,
-                                logicalDate = logicalDate,
-                                state = CompletionState.DONE
-                            )
-                        )
+                        logCompletionUseCase.executeLog(habitId, CompletionState.DONE, logicalDate)
                         NotificationHelper.cancelNotification(context, habitId)
+                        ReminderScheduler.cancelAlarm(context, habitId)
                     }
                     NotificationHelper.ACTION_MINIMUM -> {
-                        completionRepository.logCompletion(
-                            LoggedCompletion(
-                                habitId = habitId,
-                                logicalDate = logicalDate,
-                                state = CompletionState.MINIMUM
-                            )
-                        )
+                        logCompletionUseCase.executeLog(habitId, CompletionState.MINIMUM, logicalDate)
                         NotificationHelper.cancelNotification(context, habitId)
+                        ReminderScheduler.cancelAlarm(context, habitId)
                     }
                     NotificationHelper.ACTION_SNOOZE -> {
-                        // Reschedule snooze alarm
                         NotificationHelper.cancelNotification(context, habitId)
                         ReminderScheduler.snoozeReminder(context, habitId, logicalDate, 30)
                     }

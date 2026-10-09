@@ -9,7 +9,6 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.habitat.app.MainActivity
 import com.habitat.app.R
-import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.model.Habit
 import java.time.LocalDate
 
@@ -109,6 +108,8 @@ object NotificationHelper {
             if (habit.fullVersion.isNotBlank()) append("Full: ${habit.fullVersion}.")
         }.ifBlank { "Time for your habit!" }
 
+        val snoozeActionLabel = context.getString(R.string.snooze_action, snoozeMinutes)
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("${habit.emoji} ${habit.name}")
@@ -119,7 +120,7 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .addAction(0, "Done", donePendingIntent)
             .addAction(0, "Min", minPendingIntent)
-            .addAction(0, "Snooze (${snoozeMinutes}m)", snoozePendingIntent)
+            .addAction(0, snoozeActionLabel, snoozePendingIntent)
             .build()
 
         manager.notify(habit.id.hashCode(), notification)

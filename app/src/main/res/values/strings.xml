@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">monkee</string>
+    <string name="app_name">Habitat</string>
+    <string name="snooze_action">Snooze (%1$dm)</string>
 </resources>

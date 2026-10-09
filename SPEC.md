@@ -155,10 +155,11 @@ Decorations, terrain painting (10 Seeds per tile), new islands, cosmetics, compa
 
 ### 8.1 Reminders
 - Per habit: fixed time or **adaptive time** = median of the last 7 to 14 completion times (needs at least 5 samples), clamped to the habit's window.
-- Notification actions: Done, Minimum, Skip, Snooze (15/30/60 min).
-- Global cap: 4 habit notifications per day. Quiet hours supported.
-- Copy rules: encouraging, specific, no guilt.
-- Android: exact alarms need the right permission; reschedule after reboot.
+- Notification actions: Done, Minimum, Snooze (snooze duration configurable in settings, default 30 min). Skip is in-app only.
+- Global cap: 4 habit notifications per day (up to 3 individual + 1 summary for remaining habits). Snoozes do not count towards the cap.
+- Quiet hours supported (default 22:00 to 07:00). Reminders falling in quiet hours defer to the quiet end time.
+- Copy rules: encouraging, specific, uses cue, full, and minimum versions, no guilt.
+- Android: inexact alarms by default for battery efficiency; exact alarms used only if user granted permission. Reschedule on boot, package update, and time changes.
 
 ### 8.2 Focus mode
 - Countdown and stopwatch, pause/resume, breaks with a return reminder, session notes and tags.
