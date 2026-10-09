@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.habitat.app.domain.AppClock
+import com.habitat.app.domain.logic.FireDecision
 import com.habitat.app.domain.logic.ReminderEngine
 import com.habitat.app.domain.model.ScheduleType
 import com.habitat.app.domain.repository.CompletionRepository
@@ -15,6 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
 import javax.inject.Inject
 
 /**
@@ -72,46 +75,48 @@ class ReminderReceiver : BroadcastReceiver() {
                     appSettings = settings
                 )
 
-                // Lateness rule / Quiet Hours re-check at fire time
-                val nowTime = clock.zonedDateTime().toLocalTime()
-                if (ReminderEngine.isInsideQuietHours(nowTime, settings.quietHoursStart, settings.quietHoursEnd)) {
-                    return@launch
-                }
-
                 val completions = completionRepository.getCompletionsForHabit(habitId).first()
                 val isLoggedToday = completions.any { it.logicalDate == today }
+                val postedIds = settingsRepository.getPostedHabitIds(today.toString())
 
-                // Check pure domain shouldPost
-                val shouldPost = ReminderEngine.shouldPost(
+                val scheduledTime = habit.reminderTime ?: clock.zonedDateTime().toLocalTime()
+                val scheduledInstant = LocalDateTime.of(today, scheduledTime).atZone(clock.zoneId()).toInstant()
+
+                val decision = ReminderEngine.evaluateFireTimeDecision(
                     habit = habit,
+                    scheduledInstant = scheduledInstant,
+                    nowInstant = clock.instant(),
+                    zoneId = clock.zoneId(),
+                    quietHoursStart = settings.quietHoursStart,
+                    quietHoursEnd = settings.quietHoursEnd,
                     isLoggedToday = isLoggedToday,
                     isWeeklyQuotaMet = false,
+                    postedIdsToday = postedIds,
                     currentLogicalDate = today
                 )
 
-                if (!shouldPost) return@launch
-
-                // Daily cap check using set of posted habit IDs
-                val postedIds = settingsRepository.getPostedHabitIds(today.toString())
-                val cap = 4
-
-                if (postedIds.size < cap || postedIds.contains(habitId)) {
-                    settingsRepository.addPostedHabitId(today.toString(), habitId)
-                    NotificationHelper.postHabitNotification(
-                        context = context,
-                        habit = habit,
-                        logicalDate = today,
-                        snoozeMinutes = settings.snoozeLengthMinutes
-                    )
-                } else {
-                    // Summary notification for overflow
-                    val habits = habitRepository.getActiveHabits().first()
-                    val overflow = habits.filter { it.id !in postedIds }
-                    NotificationHelper.postSummaryNotification(
-                        context = context,
-                        overflowHabits = overflow,
-                        logicalDate = today
-                    )
+                when (decision) {
+                    is FireDecision.Post -> {
+                        settingsRepository.addPostedHabitId(today.toString(), habitId)
+                        NotificationHelper.postHabitNotification(
+                            context = context,
+                            habit = habit,
+                            logicalDate = today,
+                            snoozeMinutes = settings.snoozeLengthMinutes
+                        )
+                    }
+                    is FireDecision.Summary -> {
+                        val habits = habitRepository.getActiveHabits().first()
+                        val overflow = habits.filter { it.id !in postedIds }
+                        NotificationHelper.postSummaryNotification(
+                            context = context,
+                            overflowHabits = overflow,
+                            logicalDate = today
+                        )
+                    }
+                    is FireDecision.Drop -> {
+                        // Suppressed (archived, unknown schedule, duplicate, quiet hours, or lateness)
+                    }
                 }
             } finally {
                 pendingResult.finish()

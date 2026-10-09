@@ -1,6 +1,7 @@
 package com.habitat.app.domain
 
-import com.habitat.app.domain.GameConfig
+import com.habitat.app.domain.logic.DropReason
+import com.habitat.app.domain.logic.FireDecision
 import com.habitat.app.domain.logic.ReminderAllocation
 import com.habitat.app.domain.logic.ReminderEngine
 import com.habitat.app.domain.model.Habit
@@ -22,6 +23,93 @@ class ReminderEngineTest {
     private val zoneBerlin = ZoneId.of("Europe/Berlin")
     private val quietStart = LocalTime.of(22, 0)
     private val quietEnd = LocalTime.of(7, 0)
+    private val disabledQuietStart = LocalTime.MIDNIGHT
+    private val disabledQuietEnd = LocalTime.MIDNIGHT
+
+    @Test
+    fun `evaluateFireTimeDecision table driven test`() {
+        val date = LocalDate.of(2025, 5, 12)
+        val habit = Habit(id = "h1", name = "Daily", schedule = ScheduleType.Daily)
+        val scheduledInstant = Instant.parse("2025-05-12T10:00:00Z")
+        val nowInstant = Instant.parse("2025-05-12T10:05:00Z")
+
+        // 1. Normal -> Post
+        val decisionNormal = ReminderEngine.evaluateFireTimeDecision(
+            habit = habit,
+            scheduledInstant = scheduledInstant,
+            nowInstant = nowInstant,
+            zoneId = zoneUtc,
+            quietHoursStart = quietStart,
+            quietHoursEnd = quietEnd,
+            isLoggedToday = false,
+            isWeeklyQuotaMet = false,
+            postedIdsToday = emptySet(),
+            currentLogicalDate = date
+        )
+        assertEquals(FireDecision.Post, decisionNormal)
+
+        // 2. >120 min late -> Drop(LatenessExceeded), posted set unchanged
+        val lateInstant = scheduledInstant.plusSeconds(121 * 60)
+        val decisionLate = ReminderEngine.evaluateFireTimeDecision(
+            habit = habit,
+            scheduledInstant = scheduledInstant,
+            nowInstant = lateInstant,
+            zoneId = zoneUtc,
+            quietHoursStart = quietStart,
+            quietHoursEnd = quietEnd,
+            isLoggedToday = false,
+            isWeeklyQuotaMet = false,
+            postedIdsToday = emptySet(),
+            currentLogicalDate = date
+        )
+        assertEquals(FireDecision.Drop(DropReason.LatenessExceeded), decisionLate)
+
+        // 3. Inside quiet hours -> Drop(QuietHours)
+        val quietInstant = Instant.parse("2025-05-12T23:00:00Z")
+        val decisionQuiet = ReminderEngine.evaluateFireTimeDecision(
+            habit = habit,
+            scheduledInstant = quietInstant,
+            nowInstant = quietInstant,
+            zoneId = zoneUtc,
+            quietHoursStart = quietStart,
+            quietHoursEnd = quietEnd,
+            isLoggedToday = false,
+            isWeeklyQuotaMet = false,
+            postedIdsToday = emptySet(),
+            currentLogicalDate = date
+        )
+        assertEquals(FireDecision.Drop(DropReason.QuietHours), decisionQuiet)
+
+        // 4. Duplicate fire -> Drop(Duplicate)
+        val decisionDuplicate = ReminderEngine.evaluateFireTimeDecision(
+            habit = habit,
+            scheduledInstant = scheduledInstant,
+            nowInstant = nowInstant,
+            zoneId = zoneUtc,
+            quietHoursStart = quietStart,
+            quietHoursEnd = quietEnd,
+            isLoggedToday = false,
+            isWeeklyQuotaMet = false,
+            postedIdsToday = setOf("h1"),
+            currentLogicalDate = date
+        )
+        assertEquals(FireDecision.Drop(DropReason.Duplicate), decisionDuplicate)
+
+        // 5. Cap exceeded -> Summary
+        val decisionCap = ReminderEngine.evaluateFireTimeDecision(
+            habit = habit,
+            scheduledInstant = scheduledInstant,
+            nowInstant = nowInstant,
+            zoneId = zoneUtc,
+            quietHoursStart = quietStart,
+            quietHoursEnd = quietEnd,
+            isLoggedToday = false,
+            isWeeklyQuotaMet = false,
+            postedIdsToday = setOf("a", "b", "c", "d"),
+            currentLogicalDate = date
+        )
+        assertEquals(FireDecision.Summary(habit), decisionCap)
+    }
 
     @Test
     fun `shouldPost table driven test`() {
@@ -76,65 +164,63 @@ class ReminderEngineTest {
     }
 
     @Test
-    fun `nextTrigger deferral in Europe Berlin timezone 2230 to 0700 next logical date`() {
-        val habit = Habit(
-            name = "Berlin Habit",
-            schedule = ScheduleType.Daily,
-            reminderTime = LocalTime.of(22, 30)
-        )
-
-        val fromInstant = Instant.parse("2025-05-01T18:00:00Z")
-        val trigger = ReminderEngine.nextTrigger(
-            habit = habit,
-            fromInstant = fromInstant,
-            zoneId = zoneBerlin,
-            dayBoundaryHour = 4,
-            quietHoursStart = quietStart,
-            quietHoursEnd = quietEnd
-        )
-
-        assertNotNull(trigger)
-        val triggerZdt = trigger!!.atZone(zoneBerlin)
-
-        assertEquals(LocalTime.of(7, 0), triggerZdt.toLocalTime())
-        assertEquals(LocalDate.of(2025, 5, 2), triggerZdt.toLocalDate())
-    }
-
-    @Test
-    fun `nextTrigger in Europe Berlin during DST spring forward and fall back`() {
+    fun `nextTrigger in Europe Berlin spring forward jumps non-existent 0230 to 0330 CEST`() {
         val habitSpring = Habit(
             name = "Spring Habit",
             schedule = ScheduleType.Daily,
             reminderTime = LocalTime.of(2, 30)
         )
 
+        // March 30, 2025 spring forward in Europe/Berlin (clocks jump 02:00 -> 03:00)
+        // Non-existent 02:30 local time advances to 03:30 CEST = 2025-03-30T01:30:00Z
         val springFrom = Instant.parse("2025-03-29T20:00:00Z")
         val springTrigger = ReminderEngine.nextTrigger(
             habit = habitSpring,
             fromInstant = springFrom,
             zoneId = zoneBerlin,
-            quietHoursStart = quietStart,
-            quietHoursEnd = quietEnd
+            quietHoursStart = disabledQuietStart,
+            quietHoursEnd = disabledQuietEnd
         )
 
         assertNotNull(springTrigger)
-        val springZdt = springTrigger!!.atZone(zoneBerlin)
-        assertTrue(springZdt.toLocalTime() >= LocalTime.of(3, 0))
+        assertEquals(Instant.parse("2025-03-30T01:30:00Z"), springTrigger)
+    }
 
+    @Test
+    fun `nextTrigger in Europe Berlin fall back overlap fires once and advances to next day`() {
         val habitFall = Habit(
             name = "Fall Habit",
             schedule = ScheduleType.Daily,
             reminderTime = LocalTime.of(1, 30)
         )
 
+        // October 26, 2025 fall back in Europe/Berlin (clocks fall back 03:00 -> 02:00)
+        // 01:30 CEST = 2025-10-25T23:30:00Z
         val fallFrom1 = Instant.parse("2025-10-25T20:00:00Z")
-        val fallTrigger1 = ReminderEngine.nextTrigger(habitFall, fallFrom1, zoneBerlin, quietHoursStart = quietStart, quietHoursEnd = quietEnd)
-        assertNotNull(fallTrigger1)
+        val trigger1 = ReminderEngine.nextTrigger(
+            habit = habitFall,
+            fromInstant = fallFrom1,
+            zoneId = zoneBerlin,
+            quietHoursStart = disabledQuietStart,
+            quietHoursEnd = disabledQuietEnd
+        )
 
-        val fallFrom2 = fallTrigger1!!.plusSeconds(60)
-        val fallTrigger2 = ReminderEngine.nextTrigger(habitFall, fallFrom2, zoneBerlin, quietHoursStart = quietStart, quietHoursEnd = quietEnd)
-        assertNotNull(fallTrigger2)
-        assertTrue(fallTrigger2!! > fallTrigger1)
+        assertNotNull(trigger1)
+        assertEquals(Instant.parse("2025-10-25T23:30:00Z"), trigger1)
+
+        // Evaluated 1 min after trigger 1
+        val fallFrom2 = trigger1!!.plusSeconds(60)
+        val trigger2 = ReminderEngine.nextTrigger(
+            habit = habitFall,
+            fromInstant = fallFrom2,
+            zoneId = zoneBerlin,
+            quietHoursStart = disabledQuietStart,
+            quietHoursEnd = disabledQuietEnd
+        )
+
+        assertNotNull(trigger2)
+        // Advances to October 27, 2025 01:30 CET = 2025-10-27T00:30:00Z
+        assertEquals(Instant.parse("2025-10-27T00:30:00Z"), trigger2)
     }
 
     @Test

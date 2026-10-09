@@ -9,7 +9,25 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import kotlin.math.max
+
+enum class DropReason {
+    Archived,
+    UnknownSchedule,
+    NotScheduledToday,
+    AlreadyLogged,
+    WeeklyQuotaMet,
+    QuietHours,
+    LatenessExceeded,
+    Duplicate
+}
+
+sealed interface FireDecision {
+    data object Post : FireDecision
+    data class Summary(val overflowHabit: Habit) : FireDecision
+    data class Drop(val reason: DropReason) : FireDecision
+}
 
 sealed interface ReminderAllocation {
     data class Individual(val habit: Habit) : ReminderAllocation
@@ -24,9 +42,52 @@ sealed interface ReminderAllocation {
 object ReminderEngine {
 
     /**
+     * Evaluates the decision on whether to Post, Summary, or Drop a habit reminder at fire time.
+     * Pure domain logic.
+     * SPEC Section 8.1.
+     */
+    fun evaluateFireTimeDecision(
+        habit: Habit,
+        scheduledInstant: Instant,
+        nowInstant: Instant,
+        zoneId: ZoneId,
+        quietHoursStart: LocalTime,
+        quietHoursEnd: LocalTime,
+        isLoggedToday: Boolean,
+        isWeeklyQuotaMet: Boolean,
+        postedIdsToday: Set<String>,
+        currentLogicalDate: LocalDate,
+        maxLatenessMinutes: Long = GameConfig.MAX_REMINDER_LATENESS_MINUTES
+    ): FireDecision {
+        if (habit.archived) return FireDecision.Drop(DropReason.Archived)
+        if (habit.schedule is ScheduleType.Unknown) return FireDecision.Drop(DropReason.UnknownSchedule)
+        if (!ScheduleEvaluator.isScheduledOn(habit.schedule, currentLogicalDate)) return FireDecision.Drop(DropReason.NotScheduledToday)
+        if (isLoggedToday) return FireDecision.Drop(DropReason.AlreadyLogged)
+        if (isWeeklyQuotaMet) return FireDecision.Drop(DropReason.WeeklyQuotaMet)
+
+        if (isLatenessExceeded(scheduledInstant, nowInstant, maxLatenessMinutes)) {
+            return FireDecision.Drop(DropReason.LatenessExceeded)
+        }
+
+        val nowTime = nowInstant.atZone(zoneId).toLocalTime()
+        if (isInsideQuietHours(nowTime, quietHoursStart, quietHoursEnd)) {
+            return FireDecision.Drop(DropReason.QuietHours)
+        }
+
+        if (postedIdsToday.contains(habit.id)) {
+            return FireDecision.Drop(DropReason.Duplicate)
+        }
+
+        if (postedIdsToday.size >= 4) {
+            return FireDecision.Summary(habit)
+        }
+
+        return FireDecision.Post
+    }
+
+    /**
      * Determines whether a reminder should be posted for [habit] on [currentLogicalDate].
      * Suppresses if archived, unknown schedule, not scheduled today, already logged today, or weekly quota met.
-     *
      * SPEC Section 8.1.
      */
     fun shouldPost(
@@ -45,7 +106,7 @@ object ReminderEngine {
 
     /**
      * Checks if an alarm delivered at [currentInstant] is stale relative to [scheduledInstant].
-     * If late by more than [maxLatenessMinutes] (default 120m / 2h), it is dropped silently.
+     * If late by more than [maxLatenessMinutes] (default 120m / 2h per GameConfig), it is dropped silently.
      * SPEC Section 8.1.
      */
     fun isLatenessExceeded(
@@ -73,7 +134,6 @@ object ReminderEngine {
     /**
      * Calculates the next trigger [Instant] for a single [habit].
      * Handles quiet hours deferral and DST transitions.
-     *
      * SPEC Section 8.1.
      */
     fun nextTrigger(
@@ -95,7 +155,6 @@ object ReminderEngine {
             if (ScheduleEvaluator.isScheduledOn(habit.schedule, candidateDate)) {
                 var localDateTime = LocalDateTime.of(candidateDate, reminderTime)
 
-                // Adjust for quiet hours: if inside quiet hours, defer to quietHoursEnd on that date or next morning
                 if (isInsideQuietHours(reminderTime, quietHoursStart, quietHoursEnd)) {
                     localDateTime = LocalDateTime.of(candidateDate, quietHoursEnd)
                     if (quietHoursStart > quietHoursEnd && reminderTime >= quietHoursStart) {
@@ -122,6 +181,7 @@ object ReminderEngine {
         start: LocalTime,
         end: LocalTime
     ): Boolean {
+        if (start == end) return false // Quiet hours disabled
         return if (start < end) {
             time >= start && time < end
         } else {
@@ -133,7 +193,6 @@ object ReminderEngine {
     /**
      * Allocates reminders for [dueHabits] given [alreadyPostedCount] and a daily [cap].
      * Orders habits by reminderTime ASC, then sortOrder ASC.
-     *
      * SPEC Section 8.1.
      */
     fun allocateDay(
