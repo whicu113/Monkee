@@ -15,7 +15,7 @@ import java.time.LocalDate
 
 /**
  * Platform helper for posting habit reminder notifications and summary notifications.
- * Uses deterministic Data URIs for PendingIntent uniqueness.
+ * Uses deterministic Data URIs with FLAG_UPDATE_CURRENT | FLAG_IMMUTABLE.
  * SPEC Section 8.1.
  */
 object NotificationHelper {
@@ -98,7 +98,7 @@ object NotificationHelper {
 
         // Action: Snooze
         val snoozeIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            data = Uri.parse("habitat://reminder/${habit.id}/snooze")
+            data = Uri.parse("habitat://reminder/${habit.id}/action_snooze")
             action = ACTION_SNOOZE
             putExtra(EXTRA_HABIT_ID, habit.id)
             putExtra(EXTRA_LOGICAL_DATE, logicalDate.toString())

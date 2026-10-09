@@ -101,7 +101,7 @@ fun HabitEditorDialog(
 
         // Check if inside quiet hours (22:00 to 07:00)
         if (ReminderEngine.isInsideQuietHours(parsed, LocalTime.of(22, 0), LocalTime.of(7, 0))) {
-            timeWarning = "⚠️ Time falls in quiet hours (22:00-07:00). Reminder will defer to 07:00."
+            timeWarning = "⚠️ Time falls in quiet hours (22:00-07:00). Reminder will deliver at 07:00."
         } else {
             timeWarning = null
         }
@@ -156,6 +156,7 @@ fun HabitEditorDialog(
                         when {
                             timeError != null -> Text(timeError!!, color = MaterialTheme.colorScheme.error)
                             timeWarning != null -> Text(timeWarning!!, color = MaterialTheme.colorScheme.tertiary)
+                            else -> Text("Note: Reminder times are approximate to preserve battery life.", style = MaterialTheme.typography.bodySmall)
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),

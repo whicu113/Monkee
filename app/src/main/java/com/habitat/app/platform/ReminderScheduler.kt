@@ -4,7 +4,7 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
+import android.net.Uri
 import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.logic.ReminderEngine
 import com.habitat.app.domain.model.AppSettings
@@ -19,14 +19,15 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * Reconciles and schedules habit reminders with exact-alarm permission check and quiet hours.
+ * Reconciles and schedules habit reminders using inexact alarms for battery efficiency.
  * SPEC Section 8.1.
  */
 object ReminderScheduler {
 
     /**
      * Idempotently reconciles alarms for active habits.
-     * Called on app start, boot, app update, habit/settings edit, and time/timezone change.
+     * Called on app startup, boot, app update, habit/settings edit, and time/timezone change.
+     * Does NOT post notifications directly.
      */
     fun reconcile(
         context: Context,
@@ -71,9 +72,9 @@ object ReminderScheduler {
         )
 
         if (nextTrigger != null) {
-            scheduleAlarm(context, habit.id, nextTrigger.toEpochMilli())
+            scheduleAlarm(context, habit.id, "alarm", nextTrigger.toEpochMilli())
         } else {
-            cancelAlarm(context, habit.id)
+            cancelAlarm(context, habit.id, "alarm")
         }
     }
 
@@ -84,50 +85,48 @@ object ReminderScheduler {
         snoozeMinutes: Int
     ) {
         val triggerAtMillis = System.currentTimeMillis() + (snoozeMinutes * 60 * 1000L)
-        scheduleAlarm(context, habitId, triggerAtMillis)
+        val intentExtraDate = logicalDate.toString()
+        scheduleAlarm(context, habitId, "snooze_alarm", triggerAtMillis, intentExtraDate)
     }
 
-    private fun scheduleAlarm(context: Context, habitId: String, triggerAtMillis: Long) {
+    private fun scheduleAlarm(
+        context: Context,
+        habitId: String,
+        actionPath: String,
+        triggerAtMillis: Long,
+        logicalDateExtra: String? = null
+    ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, ReminderReceiver::class.java).apply {
+            data = Uri.parse("habitat://reminder/$habitId/$actionPath")
             putExtra(NotificationHelper.EXTRA_HABIT_ID, habitId)
+            if (logicalDateExtra != null) {
+                putExtra(NotificationHelper.EXTRA_LOGICAL_DATE, logicalDateExtra)
+            }
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            habitId.hashCode(),
+            0,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Scheduling is inexact by default for battery efficiency;
-        // exact alarms (setExactAndAllowWhileIdle) are used only if SCHEDULE_EXACT_ALARM permission is granted on Android 12+ (SDK 31+)
-        val canUseExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            alarmManager.canScheduleExactAlarms()
-        } else {
-            true
-        }
-
-        if (canUseExact) {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                triggerAtMillis,
-                pendingIntent
-            )
-        } else {
-            alarmManager.setAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                triggerAtMillis,
-                pendingIntent
-            )
-        }
+        // Inexact alarms are used by default to preserve device battery life per Android/Play policy guidelines
+        alarmManager.setAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            triggerAtMillis,
+            pendingIntent
+        )
     }
 
-    fun cancelAlarm(context: Context, habitId: String) {
+    fun cancelAlarm(context: Context, habitId: String, actionPath: String = "alarm") {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, ReminderReceiver::class.java)
+        val intent = Intent(context, ReminderReceiver::class.java).apply {
+            data = Uri.parse("habitat://reminder/$habitId/$actionPath")
+        }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            habitId.hashCode(),
+            0,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
