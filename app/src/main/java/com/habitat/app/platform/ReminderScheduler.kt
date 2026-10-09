@@ -8,6 +8,7 @@ import android.os.Build
 import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.logic.ReminderEngine
 import com.habitat.app.domain.model.AppSettings
+import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
 import kotlinx.coroutines.CoroutineScope
@@ -40,20 +41,39 @@ object ReminderScheduler {
             val zoneId = clock.zoneId()
 
             habits.forEach { habit ->
-                val nextTrigger = ReminderEngine.nextTrigger(
+                scheduleNextForHabit(
+                    context = context,
                     habit = habit,
                     fromInstant = nowInstant,
                     zoneId = zoneId,
-                    quietHoursStart = appSettings.quietHoursStart,
-                    quietHoursEnd = appSettings.quietHoursEnd
+                    appSettings = appSettings
                 )
-
-                if (nextTrigger != null) {
-                    scheduleAlarm(context, habit.id, nextTrigger.toEpochMilli())
-                } else {
-                    cancelAlarm(context, habit.id)
-                }
             }
+        }
+    }
+
+    /**
+     * Schedules the next trigger for a single [habit] starting after [fromInstant].
+     */
+    fun scheduleNextForHabit(
+        context: Context,
+        habit: Habit,
+        fromInstant: java.time.Instant,
+        zoneId: ZoneId,
+        appSettings: AppSettings = AppSettings()
+    ) {
+        val nextTrigger = ReminderEngine.nextTrigger(
+            habit = habit,
+            fromInstant = fromInstant,
+            zoneId = zoneId,
+            quietHoursStart = appSettings.quietHoursStart,
+            quietHoursEnd = appSettings.quietHoursEnd
+        )
+
+        if (nextTrigger != null) {
+            scheduleAlarm(context, habit.id, nextTrigger.toEpochMilli())
+        } else {
+            cancelAlarm(context, habit.id)
         }
     }
 

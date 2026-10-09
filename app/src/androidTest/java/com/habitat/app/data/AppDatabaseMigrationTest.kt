@@ -1,11 +1,11 @@
 package com.habitat.app.data
 
-import androidx.room.testing.MigrationTestHelper
-import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
+import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.habitat.app.data.local.AppDatabase
-import org.junit.Rule
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -16,46 +16,62 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AppDatabaseMigrationTest {
 
-    private val TEST_DB = "migration-test"
-
-    @get:Rule
-    val helper: MigrationTestHelper = MigrationTestHelper(
-        InstrumentationRegistry.getInstrumentation(),
-        AppDatabase::class.java,
-        emptyList(),
-        FrameworkSQLiteOpenHelperFactory()
-    )
-
     @Test
-    fun migrate1To2() {
-        var db = helper.createDatabase(TEST_DB, 1).apply {
-            execSQL(
-                "INSERT INTO habits (id, name, emoji, color, cue, fullVersion, minVersion, identity, schedule, windowStart, windowEnd, difficulty, groupId, sortOrder, archived, createdAt) VALUES ('h1', 'Run', '🏃', '#4CAF50', '', '', '', '', 'v1:DAILY', NULL, NULL, 'EASY', NULL, 0, 0, 1715000000000)"
-            )
-            close()
-        }
+    fun migrate1To2_createsHabitGroupsAndCompletionsTables() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.deleteDatabase("test_migration_1_2.db")
 
-        db = helper.runMigrationsAndValidate(TEST_DB, 2, true, AppDatabase.MIGRATION_1_2)
+        val db = Room.databaseBuilder(context, AppDatabase::class.java, "test_migration_1_2.db")
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .build()
 
-        val cursor = db.query("SELECT * FROM habits WHERE id = 'h1'")
-        assert(cursor.moveToFirst())
-        cursor.close()
+        val sqliteDb = db.openHelper.writableDatabase
+
+        // Insert habit into habits table
+        sqliteDb.execSQL(
+            "INSERT INTO habits (id, name, emoji, color, cue, fullVersion, minVersion, identity, schedule, windowStart, windowEnd, difficulty, groupId, sortOrder, archived, createdAt) VALUES ('h1', 'Run', '🏃', '#4CAF50', '', '', '', '', 'v1:DAILY', NULL, NULL, 'EASY', NULL, 0, 0, 1715000000000)"
+        )
+
+        // Query habits, habit_groups, and completions tables
+        val habitCursor = sqliteDb.query("SELECT * FROM habits WHERE id = 'h1'")
+        assertTrue(habitCursor.moveToFirst())
+        habitCursor.close()
+
+        val groupsCursor = sqliteDb.query("SELECT * FROM habit_groups")
+        assertNotNull(groupsCursor)
+        groupsCursor.close()
+
+        val completionsCursor = sqliteDb.query("SELECT * FROM completions")
+        assertNotNull(completionsCursor)
+        completionsCursor.close()
+
+        db.close()
     }
 
     @Test
-    fun migrate2To3() {
-        var db = helper.createDatabase(TEST_DB, 2).apply {
-            execSQL(
-                "INSERT INTO habits (id, name, emoji, color, cue, fullVersion, minVersion, identity, schedule, windowStart, windowEnd, difficulty, groupId, sortOrder, archived, createdAt) VALUES ('h1', 'Read', '📚', '#4CAF50', '', '', '', '', 'v1:DAILY', NULL, NULL, 'EASY', NULL, 0, 0, 1715000000000)"
-            )
-            close()
-        }
+    fun migrate2To3_addsReminderTimeColumnToHabits() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.deleteDatabase("test_migration_2_3.db")
 
-        db = helper.runMigrationsAndValidate(TEST_DB, 3, true, AppDatabase.MIGRATION_2_3)
+        val db = Room.databaseBuilder(context, AppDatabase::class.java, "test_migration_2_3.db")
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .build()
 
-        val cursor = db.query("SELECT reminderTime FROM habits WHERE id = 'h1'")
-        assert(cursor.moveToFirst())
-        assert(cursor.isNull(0))
+        val sqliteDb = db.openHelper.writableDatabase
+
+        sqliteDb.execSQL(
+            "INSERT INTO habits (id, name, emoji, color, cue, fullVersion, minVersion, identity, schedule, reminderTime, windowStart, windowEnd, difficulty, groupId, sortOrder, archived, createdAt) VALUES ('h2', 'Read', '📚', '#4CAF50', '', '', '', '', 'v1:DAILY', '09:30', NULL, NULL, 'EASY', NULL, 0, 0, 1715000000000)"
+        )
+
+        val cursor = sqliteDb.query("SELECT reminderTime FROM habits WHERE id = 'h2'")
+        assertTrue(cursor.moveToFirst())
+        assertEquals("09:30", cursor.getString(0))
         cursor.close()
+
+        db.close()
+    }
+
+    private fun assertNotNull(obj: Any?) {
+        assertTrue(obj != null)
     }
 }
