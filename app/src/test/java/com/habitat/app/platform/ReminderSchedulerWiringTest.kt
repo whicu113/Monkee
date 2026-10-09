@@ -46,7 +46,7 @@ class ReminderSchedulerWiringTest {
         val completionRepo = CompletionRepositoryImpl(FakeCompletionDao())
 
         // 1. Initial reconcile with quietHoursEnabled = true (default)
-        ReminderScheduler.reconcileDirect(
+        ReminderScheduler.reconcile(
             context = DummyContext(),
             habitRepository = fakeHabitRepo,
             completionRepository = completionRepo,
@@ -63,7 +63,7 @@ class ReminderSchedulerWiringTest {
         val currentSettings = fakeSettingsRepo.getSettingsValue()
         fakeSettingsRepo.updateSettings(currentSettings.copy(quietHoursEnabled = false))
 
-        ReminderScheduler.reconcileDirect(
+        ReminderScheduler.reconcile(
             context = DummyContext(),
             habitRepository = fakeHabitRepo,
             completionRepository = completionRepo,

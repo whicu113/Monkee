@@ -44,7 +44,7 @@ class BootReceiver : BroadcastReceiver() {
             val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    ReminderScheduler.reconcileDirect(
+                    ReminderScheduler.reconcile(
                         context = context,
                         habitRepository = habitRepository,
                         completionRepository = completionRepository,

@@ -28,21 +28,10 @@ object ReminderScheduler {
     /**
      * Idempotently reconciles alarms for active habits.
      * Fetches current [AppSettings] directly from [settingsRepository].
+     * Suspend function so callers like [BootReceiver] can await completion in goAsync().
      * Called on app startup, boot, app update, habit/settings edit, and time/timezone change.
      */
-    fun reconcile(
-        context: Context,
-        habitRepository: HabitRepository,
-        completionRepository: CompletionRepository,
-        settingsRepository: SettingsRepository,
-        clock: AppClock
-    ) {
-        CoroutineScope(Dispatchers.IO).launch {
-            reconcileDirect(context, habitRepository, completionRepository, settingsRepository, clock)
-        }
-    }
-
-    suspend fun reconcileDirect(
+    suspend fun reconcile(
         context: Context,
         habitRepository: HabitRepository,
         completionRepository: CompletionRepository,
@@ -64,6 +53,29 @@ object ReminderScheduler {
             )
         }
     }
+
+    /**
+     * Fire-and-forget wrapper around [reconcile] for UI callers or application startup.
+     */
+    fun reconcileAsync(
+        context: Context,
+        habitRepository: HabitRepository,
+        completionRepository: CompletionRepository,
+        settingsRepository: SettingsRepository,
+        clock: AppClock
+    ) {
+        CoroutineScope(Dispatchers.IO).launch {
+            reconcile(context, habitRepository, completionRepository, settingsRepository, clock)
+        }
+    }
+
+    suspend fun reconcileDirect(
+        context: Context,
+        habitRepository: HabitRepository,
+        completionRepository: CompletionRepository,
+        settingsRepository: SettingsRepository,
+        clock: AppClock
+    ) = reconcile(context, habitRepository, completionRepository, settingsRepository, clock)
 
     /**
      * Schedules the next trigger for a single [habit] starting after [fromInstant].

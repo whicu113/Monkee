@@ -32,7 +32,7 @@ class HabitatApplication : Application() {
         NotificationHelper.createNotificationChannel(this)
 
         // Single startup reconciliation: calculates & schedules future alarms without posting notifications
-        ReminderScheduler.reconcile(
+        ReminderScheduler.reconcileAsync(
             context = this,
             habitRepository = habitRepository,
             completionRepository = completionRepository,
