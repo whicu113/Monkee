@@ -63,11 +63,9 @@ class ScheduleEvaluatorTest {
 
         assertTrue(ScheduleEvaluator.isScheduledOn(schedule, anyDate))
 
-        // Available when completions < n
         assertTrue(ScheduleEvaluator.isDueOn(schedule, anyDate, completionsThisWeek = 0))
         assertTrue(ScheduleEvaluator.isDueOn(schedule, anyDate, completionsThisWeek = 2))
 
-        // No longer due once target completions (n) reached
         assertFalse(ScheduleEvaluator.isDueOn(schedule, anyDate, completionsThisWeek = 3))
         assertFalse(ScheduleEvaluator.isDueOn(schedule, anyDate, completionsThisWeek = 4))
     }
@@ -84,37 +82,42 @@ class ScheduleEvaluatorTest {
     }
 
     @Test
-    fun `completion at 0330 AM belongs to previous logical date`() {
+    fun `completion at 0330 AM belongs to previous logical date in Europe Berlin timezone`() {
+        val berlinZone = ZoneId.of("Europe/Berlin")
         val clock0330 = object : AppClock {
-            override fun instant() = Instant.parse("2025-05-12T03:30:00Z")
-            override fun zoneId() = ZoneId.of("UTC")
+            // 03:30 CEST on May 12, 2025 = 01:30 UTC
+            override fun instant() = Instant.parse("2025-05-12T01:30:00Z")
+            override fun zoneId() = berlinZone
         }
 
         assertEquals(LocalDate.of(2025, 5, 11), clock0330.logicalDate(4))
     }
 
     @Test
-    fun `DST transitions preserve 0400 boundary logical date correctly`() {
-        val nyZone = ZoneId.of("America/New_York")
+    fun `DST transitions in Europe Berlin timezone preserve 0400 boundary logical date`() {
+        val berlinZone = ZoneId.of("Europe/Berlin")
 
-        // Spring forward day: March 9, 2025
+        // Spring forward day in Europe/Berlin: March 30, 2025 (clocks jump 02:00 -> 03:00)
+        // 03:30 CEST (01:30 UTC) -> logically belongs to March 29 because 03:30 < 04:00 boundary
         val springClock0330 = object : AppClock {
-            override fun instant() = Instant.parse("2025-03-09T07:30:00Z")
-            override fun zoneId() = nyZone
+            override fun instant() = Instant.parse("2025-03-30T01:30:00Z")
+            override fun zoneId() = berlinZone
         }
-        assertEquals(LocalDate.of(2025, 3, 8), springClock0330.logicalDate(4))
+        assertEquals(LocalDate.of(2025, 3, 29), springClock0330.logicalDate(4))
 
+        // 04:15 CEST (02:15 UTC) -> logically belongs to March 30 because 04:15 >= 04:00
         val springClock0415 = object : AppClock {
-            override fun instant() = Instant.parse("2025-03-09T08:15:00Z")
-            override fun zoneId() = nyZone
+            override fun instant() = Instant.parse("2025-03-30T02:15:00Z")
+            override fun zoneId() = berlinZone
         }
-        assertEquals(LocalDate.of(2025, 3, 9), springClock0415.logicalDate(4))
+        assertEquals(LocalDate.of(2025, 3, 30), springClock0415.logicalDate(4))
 
-        // Fall back day: November 2, 2025
+        // Fall back day in Europe/Berlin: October 26, 2025 (clocks fall back 03:00 -> 02:00)
+        // 03:30 CET (02:30 UTC) -> logically belongs to Oct 25
         val fallClock0330 = object : AppClock {
-            override fun instant() = Instant.parse("2025-11-02T08:30:00Z")
-            override fun zoneId() = nyZone
+            override fun instant() = Instant.parse("2025-10-26T02:30:00Z")
+            override fun zoneId() = berlinZone
         }
-        assertEquals(LocalDate.of(2025, 11, 1), fallClock0330.logicalDate(4))
+        assertEquals(LocalDate.of(2025, 10, 25), fallClock0330.logicalDate(4))
     }
 }

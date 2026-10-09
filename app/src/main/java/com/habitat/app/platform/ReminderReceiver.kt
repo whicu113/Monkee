@@ -14,7 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.time.LocalTime
+import java.time.LocalDate
 import javax.inject.Inject
 
 /**
@@ -43,6 +43,7 @@ class ReminderReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val habitId = intent.getStringExtra(NotificationHelper.EXTRA_HABIT_ID) ?: return
+        val intentDateStr = intent.getStringExtra(NotificationHelper.EXTRA_LOGICAL_DATE)
         val pendingResult = goAsync()
 
         CoroutineScope(Dispatchers.IO).launch {
@@ -52,6 +53,14 @@ class ReminderReceiver : BroadcastReceiver() {
 
                 val settings = settingsRepository.getSettings().first()
                 val today = clock.logicalDate()
+
+                // Snooze 04:00 Day Boundary check: drop silently if intent date has passed
+                if (intentDateStr != null) {
+                    val intentDate = LocalDate.parse(intentDateStr)
+                    if (ReminderEngine.isSnoozeExpired(intentDate, today)) {
+                        return@launch
+                    }
+                }
 
                 // RE-ARM FIRST: Arm the next trigger BEFORE posting notification
                 val nowInstant = clock.instant().plusSeconds(60)
@@ -65,9 +74,6 @@ class ReminderReceiver : BroadcastReceiver() {
 
                 // Lateness rule / Quiet Hours re-check at fire time
                 val nowTime = clock.zonedDateTime().toLocalTime()
-                val reminderTime = habit.reminderTime ?: LocalTime.now()
-
-                // If fire time falls in quiet hours or is stale (>2h late), skip posting
                 if (ReminderEngine.isInsideQuietHours(nowTime, settings.quietHoursStart, settings.quietHoursEnd)) {
                     return@launch
                 }

@@ -2,7 +2,7 @@ package com.habitat.app.domain
 
 /**
  * Game configuration holding default starting values and tunable constants.
- * SPEC Section 1 & 4.3.
+ * SPEC Section 1 & 4.3 & 8.1.
  */
 object GameConfig {
     /** Default logical day boundary hour (04:00 local time). SPEC 4.3 */
@@ -22,4 +22,7 @@ object GameConfig {
 
     /** Number of completions required to earn 1 rest token. SPEC 5.3 */
     const val COMPLETIONS_PER_REST_TOKEN: Int = 7
+
+    /** Maximum allowed lateness (in minutes) for delivering a reminder before dropping it as stale. SPEC 8.1 */
+    const val MAX_REMINDER_LATENESS_MINUTES: Long = 120L
 }

@@ -1,8 +1,9 @@
 package com.habitat.app.domain.logic
 
+import com.habitat.app.domain.GameConfig
 import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.model.ScheduleType
-import java.time.DayOfWeek
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -17,7 +18,7 @@ sealed interface ReminderAllocation {
 
 /**
  * Pure domain engine for calculation of next trigger times, quiet hours deferral,
- * post eligibility, and daily cap allocation.
+ * post eligibility, lateness rules, and daily cap allocation.
  * SPEC Section 8.1.
  */
 object ReminderEngine {
@@ -40,6 +41,33 @@ object ReminderEngine {
         if (isLoggedToday) return false
         if (isWeeklyQuotaMet) return false
         return true
+    }
+
+    /**
+     * Checks if an alarm delivered at [currentInstant] is stale relative to [scheduledInstant].
+     * If late by more than [maxLatenessMinutes] (default 120m / 2h), it is dropped silently.
+     * SPEC Section 8.1.
+     */
+    fun isLatenessExceeded(
+        scheduledInstant: Instant,
+        currentInstant: Instant,
+        maxLatenessMinutes: Long = GameConfig.MAX_REMINDER_LATENESS_MINUTES
+    ): Boolean {
+        if (currentInstant <= scheduledInstant) return false
+        val latenessMinutes = Duration.between(scheduledInstant, currentInstant).toMinutes()
+        return latenessMinutes > maxLatenessMinutes
+    }
+
+    /**
+     * Checks whether a snoozed reminder occurrence date [occurrenceDate] has expired
+     * relative to [currentLogicalDate] (past the 04:00 day boundary).
+     * SPEC Section 8.1.
+     */
+    fun isSnoozeExpired(
+        occurrenceDate: LocalDate,
+        currentLogicalDate: LocalDate
+    ): Boolean {
+        return currentLogicalDate > occurrenceDate
     }
 
     /**
@@ -67,7 +95,7 @@ object ReminderEngine {
             if (ScheduleEvaluator.isScheduledOn(habit.schedule, candidateDate)) {
                 var localDateTime = LocalDateTime.of(candidateDate, reminderTime)
 
-                // Adjust for quiet hours
+                // Adjust for quiet hours: if inside quiet hours, defer to quietHoursEnd on that date or next morning
                 if (isInsideQuietHours(reminderTime, quietHoursStart, quietHoursEnd)) {
                     localDateTime = LocalDateTime.of(candidateDate, quietHoursEnd)
                     if (quietHoursStart > quietHoursEnd && reminderTime >= quietHoursStart) {

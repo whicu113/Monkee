@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.habitat.app.MainActivity
@@ -14,12 +15,15 @@ import java.time.LocalDate
 
 /**
  * Platform helper for posting habit reminder notifications and summary notifications.
+ * Uses deterministic Data URIs for PendingIntent uniqueness.
  * SPEC Section 8.1.
  */
 object NotificationHelper {
 
     const val CHANNEL_ID = "habit_reminders"
-    const val SUMMARY_NOTIFICATION_ID = 90000
+    const val SUMMARY_TAG = "summary"
+    const val SUMMARY_ID = 90000
+    const val HABIT_NOTIFICATION_ID = 1
 
     const val ACTION_DONE = "com.habitat.app.ACTION_DONE"
     const val ACTION_MINIMUM = "com.habitat.app.ACTION_MINIMUM"
@@ -27,15 +31,6 @@ object NotificationHelper {
 
     const val EXTRA_HABIT_ID = "extra_habit_id"
     const val EXTRA_LOGICAL_DATE = "extra_logical_date"
-    const val EXTRA_HABIT_NAME = "extra_habit_name"
-
-    /**
-     * Generates a deterministic positive integer code for PendingIntents.
-     */
-    fun deterministicCode(id: String, actionOffset: Int): Int {
-        val base = (id.hashCode() and 0x0FFF) * 10
-        return base + actionOffset
-    }
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -61,53 +56,56 @@ object NotificationHelper {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val contentIntent = Intent(context, MainActivity::class.java).apply {
+            data = Uri.parse("habitat://reminder/${habit.id}/open")
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_HABIT_ID, habit.id)
             putExtra(EXTRA_LOGICAL_DATE, logicalDate.toString())
         }
         val contentPendingIntent = PendingIntent.getActivity(
             context,
-            deterministicCode(habit.id, 1),
+            0,
             contentIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         // Action: Done
         val doneIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            data = Uri.parse("habitat://reminder/${habit.id}/done")
             action = ACTION_DONE
             putExtra(EXTRA_HABIT_ID, habit.id)
             putExtra(EXTRA_LOGICAL_DATE, logicalDate.toString())
         }
         val donePendingIntent = PendingIntent.getBroadcast(
             context,
-            deterministicCode(habit.id, 2),
+            0,
             doneIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         // Action: Minimum
         val minIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            data = Uri.parse("habitat://reminder/${habit.id}/min")
             action = ACTION_MINIMUM
             putExtra(EXTRA_HABIT_ID, habit.id)
             putExtra(EXTRA_LOGICAL_DATE, logicalDate.toString())
         }
         val minPendingIntent = PendingIntent.getBroadcast(
             context,
-            deterministicCode(habit.id, 3),
+            0,
             minIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         // Action: Snooze
         val snoozeIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            data = Uri.parse("habitat://reminder/${habit.id}/snooze")
             action = ACTION_SNOOZE
             putExtra(EXTRA_HABIT_ID, habit.id)
             putExtra(EXTRA_LOGICAL_DATE, logicalDate.toString())
-            putExtra(EXTRA_HABIT_NAME, habit.name)
         }
         val snoozePendingIntent = PendingIntent.getBroadcast(
             context,
-            deterministicCode(habit.id, 4),
+            0,
             snoozeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -133,7 +131,7 @@ object NotificationHelper {
             .addAction(0, snoozeActionLabel, snoozePendingIntent)
             .build()
 
-        manager.notify(deterministicCode(habit.id, 0), notification)
+        manager.notify(habit.id, HABIT_NOTIFICATION_ID, notification)
     }
 
     fun postSummaryNotification(
@@ -146,12 +144,13 @@ object NotificationHelper {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val contentIntent = Intent(context, MainActivity::class.java).apply {
+            data = Uri.parse("habitat://reminder/summary/open")
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_LOGICAL_DATE, logicalDate.toString())
         }
         val contentPendingIntent = PendingIntent.getActivity(
             context,
-            SUMMARY_NOTIFICATION_ID,
+            0,
             contentIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -168,11 +167,11 @@ object NotificationHelper {
             .setAutoCancel(true)
             .build()
 
-        manager.notify(SUMMARY_NOTIFICATION_ID, notification)
+        manager.notify(SUMMARY_TAG, SUMMARY_ID, notification)
     }
 
     fun cancelNotification(context: Context, habitId: String) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.cancel(deterministicCode(habitId, 0))
+        manager.cancel(habitId, HABIT_NOTIFICATION_ID)
     }
 }
