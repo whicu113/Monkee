@@ -23,18 +23,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.habitat.app.domain.logic.ReminderEngine
 import com.habitat.app.domain.model.Difficulty
 import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.model.ScheduleType
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HabitEditorDialog(
     habit: Habit? = null,
     onDismiss: () -> Unit,
-    onSave: (Habit) -> Unit,
+    onSave: (Habit) -> Unit
 ) {
     var name by remember { mutableStateOf(habit?.name ?: "") }
     var emoji by remember { mutableStateOf(habit?.emoji ?: "🌱") }
@@ -43,6 +45,8 @@ fun HabitEditorDialog(
     var minVersion by remember { mutableStateOf(habit?.minVersion ?: "") }
     var identity by remember { mutableStateOf(habit?.identity ?: "") }
     var difficulty by remember { mutableStateOf(habit?.difficulty ?: Difficulty.EASY) }
+    var reminderTimeStr by remember { mutableStateOf(habit?.reminderTime?.toString() ?: "09:00") }
+
     var scheduleTypeOption by remember {
         mutableStateOf(
             when (habit?.schedule) {
@@ -75,6 +79,35 @@ fun HabitEditorDialog(
     }
 
     var nameError by remember { mutableStateOf(value = false) }
+    var timeError by remember { mutableStateOf<String?>(null) }
+    var timeWarning by remember { mutableStateOf<String?>(null) }
+
+    fun validateTime(timeStr: String): LocalTime? {
+        val parsed = try { LocalTime.parse(timeStr) } catch (_: Exception) { null }
+        if (parsed == null) {
+            timeError = "Invalid time format (use HH:mm)"
+            timeWarning = null
+            return null
+        }
+
+        // Block reminder times before 04:00 boundary (00:00 to 04:00)
+        if (parsed >= LocalTime.MIDNIGHT && parsed < LocalTime.of(4, 0)) {
+            timeError = "Reminder times before 04:00 day boundary are not allowed"
+            timeWarning = null
+            return null
+        }
+
+        timeError = null
+
+        // Check if inside quiet hours (22:00 to 07:00)
+        if (ReminderEngine.isInsideQuietHours(parsed, LocalTime.of(22, 0), LocalTime.of(7, 0))) {
+            timeWarning = "⚠️ Time falls in quiet hours (22:00-07:00). Reminder will defer to 07:00."
+        } else {
+            timeWarning = null
+        }
+
+        return parsed
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -110,6 +143,24 @@ fun HabitEditorDialog(
                         singleLine = true
                     )
                 }
+
+                OutlinedTextField(
+                    value = reminderTimeStr,
+                    onValueChange = {
+                        reminderTimeStr = it
+                        validateTime(it)
+                    },
+                    label = { Text("Reminder Time (HH:mm)") },
+                    isError = timeError != null,
+                    supportingText = {
+                        when {
+                            timeError != null -> Text(timeError!!, color = MaterialTheme.colorScheme.error)
+                            timeWarning != null -> Text(timeWarning!!, color = MaterialTheme.colorScheme.tertiary)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
 
                 OutlinedTextField(
                     value = cue,
@@ -236,6 +287,9 @@ fun HabitEditorDialog(
                         return@Button
                     }
 
+                    val validatedTime = validateTime(reminderTimeStr)
+                    if (timeError != null) return@Button
+
                     val finalSchedule: ScheduleType = when (scheduleTypeOption) {
                         "WEEKDAYS" -> ScheduleType.Weekdays(selectedWeekdays)
                         "EVERY_N" -> ScheduleType.EveryNDays(
@@ -255,6 +309,7 @@ fun HabitEditorDialog(
                         fullVersion = fullVersion.trim(),
                         minVersion = minVersion.trim(),
                         identity = identity.trim(),
+                        reminderTime = validatedTime,
                         difficulty = difficulty,
                         schedule = finalSchedule
                     )

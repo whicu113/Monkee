@@ -1,5 +1,12 @@
 package com.habitat.app.ui.habit
 
+import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,6 +23,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,11 +62,22 @@ import kotlin.math.roundToInt
 @Composable
 fun HabitListScreen(
     viewModel: HabitViewModel,
+    onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var editingHabit by remember { mutableStateOf<Habit?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showPermissionRationale by remember { mutableStateOf(false) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            // Permanently denied link to settings handled via dialog
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -66,8 +89,18 @@ fun HabitListScreen(
                             text = "Consistency: ${(score * 100).roundToInt()}%",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(end = 16.dp)
+                            modifier = Modifier.padding(end = 8.dp)
                         )
+                    }
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        IconButton(onClick = { showPermissionRationale = true }) {
+                            Icon(Icons.Default.Notifications, contentDescription = "Enable Notifications")
+                        }
+                    }
+
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                 }
             )
@@ -84,7 +117,7 @@ fun HabitListScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Backfill Date Selection Strip (Past 7 Days -> Today; Future dates blocked)
+            // Backfill Date Selection Strip
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -106,7 +139,7 @@ fun HabitListScreen(
                 }
             }
 
-            // Debug-build-only time shift controls
+            // Debug controls
             if (BuildConfig.DEBUG) {
                 Card(
                     modifier = Modifier
@@ -114,30 +147,26 @@ fun HabitListScreen(
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "🛠️ Debug Date: ${uiState.currentLogicalDate}",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            OutlinedButton(
-                                onClick = { viewModel.shiftDebugTime(days = 1, hours = 0) }
-                            ) {
-                                Text("+1d", fontSize = 10.sp)
-                            }
-                            OutlinedButton(
-                                onClick = { viewModel.shiftDebugTime(days = 0, hours = 1) }
-                            ) {
-                                Text("+1h", fontSize = 10.sp)
-                            }
-                            Button(onClick = { viewModel.resetDebugTime() }) {
-                                Text("Reset", fontSize = 10.sp)
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🛠️ Debug Date: ${uiState.currentLogicalDate}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                OutlinedButton(onClick = { viewModel.shiftDebugTime(days = 1, hours = 0) }) {
+                                    Text("+1d", fontSize = 10.sp)
+                                }
+                                OutlinedButton(onClick = { viewModel.shiftDebugTime(days = 0, hours = 1) }) {
+                                    Text("+1h", fontSize = 10.sp)
+                                }
+                                Button(onClick = { viewModel.resetDebugTime() }) {
+                                    Text("Reset", fontSize = 10.sp)
+                                }
                             }
                         }
                     }
@@ -185,6 +214,42 @@ fun HabitListScreen(
                     }
                 }
             }
+        }
+
+        if (showPermissionRationale) {
+            AlertDialog(
+                onDismissRequest = { showPermissionRationale = false },
+                title = { Text("Enable Notifications") },
+                text = {
+                    Text("Habitat uses quiet, encouraging notifications to help you repeat small behaviors without guilt. You can snooze or check off habits directly from notifications.")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showPermissionRationale = false
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }
+                    ) {
+                        Text("Allow")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showPermissionRationale = false
+                            // Open system settings for permanent denial
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            }
+                            context.startActivity(intent)
+                        }
+                    ) {
+                        Text("System Settings")
+                    }
+                }
+            )
         }
 
         if (showCreateDialog) {

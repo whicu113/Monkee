@@ -27,7 +27,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "habitat.db"
         )
-            .fallbackToDestructiveMigration()
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             .build()
     }
 

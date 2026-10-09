@@ -1,0 +1,77 @@
+package com.habitat.app.data.repository
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import com.habitat.app.domain.model.AppSettings
+import com.habitat.app.domain.repository.SettingsRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import java.time.DayOfWeek
+import java.time.LocalTime
+import javax.inject.Inject
+import javax.inject.Singleton
+
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "app_settings")
+
+@Singleton
+class SettingsRepositoryImpl @Inject constructor(
+    @ApplicationContext private val context: Context
+) : SettingsRepository {
+
+    private object Keys {
+        val DAY_BOUNDARY = intPreferencesKey("day_boundary_hour")
+        val QUIET_START = stringPreferencesKey("quiet_hours_start")
+        val QUIET_END = stringPreferencesKey("quiet_hours_end")
+        val SNOOZE_LENGTH = intPreferencesKey("snooze_length_minutes")
+        val STRICT_STREAKS = booleanPreferencesKey("strict_streaks")
+        val AUTO_REST_TOKENS = booleanPreferencesKey("auto_rest_tokens")
+        val START_OF_WEEK = stringPreferencesKey("start_of_week")
+    }
+
+    override fun getSettings(): Flow<AppSettings> {
+        return context.dataStore.data.map { prefs ->
+            AppSettings(
+                dayBoundaryHour = prefs[Keys.DAY_BOUNDARY] ?: 4,
+                quietHoursStart = prefs[Keys.QUIET_START]?.let { LocalTime.parse(it) } ?: LocalTime.of(22, 0),
+                quietHoursEnd = prefs[Keys.QUIET_END]?.let { LocalTime.parse(it) } ?: LocalTime.of(7, 0),
+                snoozeLengthMinutes = prefs[Keys.SNOOZE_LENGTH] ?: 30,
+                strictStreaks = prefs[Keys.STRICT_STREAKS] ?: false,
+                autoUseRestTokens = prefs[Keys.AUTO_REST_TOKENS] ?: true,
+                startOfWeekDay = prefs[Keys.START_OF_WEEK]?.let { DayOfWeek.valueOf(it) } ?: DayOfWeek.MONDAY
+            )
+        }
+    }
+
+    override suspend fun updateSettings(settings: AppSettings) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.DAY_BOUNDARY] = settings.dayBoundaryHour
+            prefs[Keys.QUIET_START] = settings.quietHoursStart.toString()
+            prefs[Keys.QUIET_END] = settings.quietHoursEnd.toString()
+            prefs[Keys.SNOOZE_LENGTH] = settings.snoozeLengthMinutes
+            prefs[Keys.STRICT_STREAKS] = settings.strictStreaks
+            prefs[Keys.AUTO_REST_TOKENS] = settings.autoUseRestTokens
+            prefs[Keys.START_OF_WEEK] = settings.startOfWeekDay.name
+        }
+    }
+
+    override suspend fun getDailyPostedCount(logicalDateString: String): Int {
+        val key = intPreferencesKey("posted_count_$logicalDateString")
+        return context.dataStore.data.first()[key] ?: 0
+    }
+
+    override suspend fun incrementDailyPostedCount(logicalDateString: String) {
+        val key = intPreferencesKey("posted_count_$logicalDateString")
+        context.dataStore.edit { prefs ->
+            val current = prefs[key] ?: 0
+            prefs[key] = current + 1
+        }
+    }
+}
