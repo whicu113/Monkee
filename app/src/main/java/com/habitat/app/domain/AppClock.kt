@@ -31,11 +31,30 @@ interface AppClock {
 }
 
 /**
- * Default implementation of [AppClock] using system clock.
+ * Default implementation of [AppClock] using system clock with debug shift support.
  */
 class SystemAppClock(
     private val zoneSupplier: () -> ZoneId = { ZoneId.systemDefault() }
 ) : AppClock {
-    override fun instant(): Instant = Instant.now()
+
+    private var shiftedDays: Long = 0
+    private var shiftedHours: Long = 0
+
+    override fun instant(): Instant {
+        return Instant.now()
+            .plusSeconds(shiftedDays * 86400)
+            .plusSeconds(shiftedHours * 3600)
+    }
+
     override fun zoneId(): ZoneId = zoneSupplier()
+
+    fun shiftTime(days: Long, hours: Long) {
+        shiftedDays += days
+        shiftedHours += hours
+    }
+
+    fun resetShift() {
+        shiftedDays = 0
+        shiftedHours = 0
+    }
 }

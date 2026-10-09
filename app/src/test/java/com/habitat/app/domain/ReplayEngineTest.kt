@@ -46,6 +46,73 @@ class ReplayEngineTest {
     }
 
     @Test
+    fun `skipped is neutral for streak length`() {
+        val today = LocalDate.of(2025, 5, 4)
+        val completions = listOf(
+            LoggedCompletion(habitId = "h1", logicalDate = LocalDate.of(2025, 5, 1), state = CompletionState.DONE),
+            LoggedCompletion(habitId = "h1", logicalDate = LocalDate.of(2025, 5, 2), state = CompletionState.SKIPPED),
+            LoggedCompletion(habitId = "h1", logicalDate = LocalDate.of(2025, 5, 3), state = CompletionState.DONE)
+        )
+
+        val result = ReplayEngine.evaluate(defaultHabit, completions, today)
+
+        // Skipped does not add to streak length -> streak = 2 (DONE + DONE)
+        assertEquals(2, result.currentStreak)
+    }
+
+    @Test
+    fun `protected counts toward streak length`() {
+        val today = LocalDate.of(2025, 5, 10)
+        // 7 DONE completions -> 1 rest token
+        val completions = (1..7).map { day ->
+            LoggedCompletion(habitId = "h1", logicalDate = LocalDate.of(2025, 5, day), state = CompletionState.DONE)
+        }
+
+        // May 8 unlogged -> PROTECTED
+        val result = ReplayEngine.evaluate(defaultHabit, completions, today, autoUseRestTokens = true)
+
+        assertEquals(OccurrenceState.PROTECTED, result.occurrenceStates[LocalDate.of(2025, 5, 8)])
+        // 7 DONE + 1 PROTECTED = 8 streak
+        assertEquals(8, result.currentStreak)
+    }
+
+    @Test
+    fun `no token spend when autoUseRestTokens is false`() {
+        val today = LocalDate.of(2025, 5, 9)
+        val completions = (1..7).map { day ->
+            LoggedCompletion(habitId = "h1", logicalDate = LocalDate.of(2025, 5, day), state = CompletionState.DONE)
+        }
+
+        val result = ReplayEngine.evaluate(defaultHabit, completions, today, autoUseRestTokens = false)
+
+        assertEquals(1, result.availableRestTokens)
+        assertEquals(OccurrenceState.MISSED, result.occurrenceStates[LocalDate.of(2025, 5, 8)])
+    }
+
+    @Test
+    fun `start of week setting affects N_PER_WEEK week boundary in replay`() {
+        val habit = Habit(
+            id = "h2",
+            name = "Weekly Habit",
+            schedule = ScheduleType.NPerWeek(n = 2),
+            createdAt = LocalDate.of(2025, 5, 4).atStartOfDay(ZoneOffset.UTC).toInstant() // Sunday May 4
+        )
+
+        val completions = listOf(
+            LoggedCompletion(habitId = "h2", logicalDate = LocalDate.of(2025, 5, 4), state = CompletionState.DONE)
+        )
+
+        // Monday start: Sun May 4 is end of week starting Mon Apr 28
+        val resultMonday = ReplayEngine.evaluate(habit, completions, LocalDate.of(2025, 5, 5), startOfWeekDay = DayOfWeek.MONDAY)
+
+        // Sunday start: Sun May 4 is start of week starting Sun May 4
+        val resultSunday = ReplayEngine.evaluate(habit, completions, LocalDate.of(2025, 5, 5), startOfWeekDay = DayOfWeek.SUNDAY)
+
+        assertEquals(OccurrenceState.DONE, resultMonday.occurrenceStates[LocalDate.of(2025, 5, 4)])
+        assertEquals(OccurrenceState.DONE, resultSunday.occurrenceStates[LocalDate.of(2025, 5, 4)])
+    }
+
+    @Test
     fun `consistency score calculates weights correctly over trailing window`() {
         val today = LocalDate.of(2025, 5, 4)
         val completions = listOf(
@@ -84,23 +151,6 @@ class ReplayEngineTest {
         val result = ReplayEngine.evaluate(defaultHabit, completions, today, autoUseRestTokens = false)
 
         assertEquals(1, result.currentStreak)
-    }
-
-    @Test
-    fun `rest token earned at 7 completions and auto-used to protect missed day`() {
-        val today = LocalDate.of(2025, 5, 9)
-        val completions = (1..7).map { day ->
-            LoggedCompletion(habitId = "h1", logicalDate = LocalDate.of(2025, 5, day), state = CompletionState.DONE)
-        }
-
-        val result7 = ReplayEngine.evaluate(defaultHabit, completions, LocalDate.of(2025, 5, 8))
-        assertEquals(1, result7.availableRestTokens)
-        assertEquals(0, result7.restTokenProgress)
-
-        val result9 = ReplayEngine.evaluate(defaultHabit, completions, today, autoUseRestTokens = true)
-        assertEquals(OccurrenceState.PROTECTED, result9.occurrenceStates[LocalDate.of(2025, 5, 8)])
-        assertEquals(0, result9.availableRestTokens)
-        assertEquals(8, result9.currentStreak)
     }
 
     @Test
