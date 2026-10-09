@@ -5,11 +5,10 @@
 /.idea/libraries
 /.idea/modules.xml
 /.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
+/.navigation/
+/.kotlin
 /captures
 .externalNativeBuild
 .cxx
 local.properties
+alarm.txt
