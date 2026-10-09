@@ -108,7 +108,8 @@ class HabitViewModel @Inject constructor(
                 quietHoursStart = settings.quietHoursStart,
                 quietHoursEnd = settings.quietHoursEnd
             )
-            val formattedNextTrigger = nextTriggerInstant?.atZone(clock.zoneId())?.toString()
+            val nextFormatter = java.time.format.DateTimeFormatter.ofPattern("MMM d HH:mm")
+            val formattedNextTrigger = nextTriggerInstant?.atZone(clock.zoneId())?.format(nextFormatter)
 
             HabitItemUiState(
                 habit = habit,

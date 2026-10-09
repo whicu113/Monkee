@@ -390,8 +390,9 @@ fun HabitCard(
 
             if (BuildConfig.DEBUG && !isUnknown) {
                 Spacer(modifier = Modifier.height(4.dp))
+                val nextText = itemState.nextTriggerFormatted ?: "None"
                 Text(
-                    text = "⏰ Reminder: ${habit.reminderTime ?: "None"} | Armed: ${itemState.isArmed} | Quiet: ${if (quietHoursEnabled) "ON" else "OFF"}",
+                    text = "⏰ Reminder: ${habit.reminderTime ?: "None"} | Next: $nextText | Armed: ${itemState.isArmed} | Quiet: ${if (quietHoursEnabled) "ON" else "OFF"}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.tertiary
                 )
