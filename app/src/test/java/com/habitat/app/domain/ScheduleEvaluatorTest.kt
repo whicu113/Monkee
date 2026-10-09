@@ -58,7 +58,7 @@ class ScheduleEvaluatorTest {
 
     @Test
     fun `n per week schedule availability resolves based on completions this week`() {
-        val schedule = ScheduleType.NPerWeek(n = 3, startOfWeekDay = DayOfWeek.MONDAY)
+        val schedule = ScheduleType.NPerWeek(n = 3)
         val anyDate = LocalDate.of(2025, 5, 12)
 
         assertTrue(ScheduleEvaluator.isScheduledOn(schedule, anyDate))
@@ -77,10 +77,10 @@ class ScheduleEvaluatorTest {
         val wednesday = LocalDate.of(2025, 5, 14)
 
         val mondayStart = ScheduleEvaluator.startOfWeek(wednesday, DayOfWeek.MONDAY)
-        assertEquals(LocalDate.of(2025, 5, 12), mondayStart) // Mon May 12
+        assertEquals(LocalDate.of(2025, 5, 12), mondayStart)
 
         val sundayStart = ScheduleEvaluator.startOfWeek(wednesday, DayOfWeek.SUNDAY)
-        assertEquals(LocalDate.of(2025, 5, 11), sundayStart) // Sun May 11
+        assertEquals(LocalDate.of(2025, 5, 11), sundayStart)
     }
 
     @Test
@@ -97,23 +97,20 @@ class ScheduleEvaluatorTest {
     fun `DST transitions preserve 0400 boundary logical date correctly`() {
         val nyZone = ZoneId.of("America/New_York")
 
-        // Spring forward day: March 9, 2025 (clocks jump 02:00 -> 03:00)
-        // 03:30 AM EST (07:30 UTC) -> logically belongs to March 8th because 03:30 < 04:00 boundary
+        // Spring forward day: March 9, 2025
         val springClock0330 = object : AppClock {
             override fun instant() = Instant.parse("2025-03-09T07:30:00Z")
             override fun zoneId() = nyZone
         }
         assertEquals(LocalDate.of(2025, 3, 8), springClock0330.logicalDate(4))
 
-        // 04:15 AM EDT (08:15 UTC) -> logically belongs to March 9th because 04:15 >= 04:00
         val springClock0415 = object : AppClock {
             override fun instant() = Instant.parse("2025-03-09T08:15:00Z")
             override fun zoneId() = nyZone
         }
         assertEquals(LocalDate.of(2025, 3, 9), springClock0415.logicalDate(4))
 
-        // Fall back day: November 2, 2025 (clocks fall back 02:00 -> 01:00)
-        // 03:30 AM EST (08:30 UTC) -> logically belongs to Nov 1st
+        // Fall back day: November 2, 2025
         val fallClock0330 = object : AppClock {
             override fun instant() = Instant.parse("2025-11-02T08:30:00Z")
             override fun zoneId() = nyZone

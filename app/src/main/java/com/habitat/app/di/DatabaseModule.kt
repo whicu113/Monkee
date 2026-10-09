@@ -3,6 +3,7 @@ package com.habitat.app.di
 import android.content.Context
 import androidx.room.Room
 import com.habitat.app.data.local.AppDatabase
+import com.habitat.app.data.local.CompletionDao
 import com.habitat.app.data.local.HabitDao
 import com.habitat.app.data.local.HabitGroupDao
 import dagger.Module
@@ -25,7 +26,9 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "habitat.db"
-        ).build()
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     @Provides
@@ -36,5 +39,10 @@ object DatabaseModule {
     @Provides
     fun provideHabitGroupDao(database: AppDatabase): HabitGroupDao {
         return database.habitGroupDao()
+    }
+
+    @Provides
+    fun provideCompletionDao(database: AppDatabase): CompletionDao {
+        return database.completionDao()
     }
 }

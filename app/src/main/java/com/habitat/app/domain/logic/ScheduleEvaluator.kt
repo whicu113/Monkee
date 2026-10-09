@@ -19,6 +19,7 @@ object ScheduleEvaluator {
      * - [ScheduleType.EveryNDays]: true if [date] is on or after [ScheduleType.EveryNDays.startDate]
      *   and is a multiple of n days from that fixed anchor date.
      * - [ScheduleType.NPerWeek]: true (available all week).
+     * - [ScheduleType.Unknown]: false (excluded from scheduling).
      *
      * SPEC Section 4.2.
      */
@@ -33,6 +34,8 @@ object ScheduleEvaluator {
             }
 
             is ScheduleType.NPerWeek -> true
+
+            is ScheduleType.Unknown -> false
         }
     }
 

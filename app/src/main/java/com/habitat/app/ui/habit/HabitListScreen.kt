@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,7 +35,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.model.Habit
+import com.habitat.app.domain.model.ScheduleType
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,13 +46,25 @@ fun HabitListScreen(
     viewModel: HabitViewModel,
     modifier: Modifier = Modifier
 ) {
-    val habits by viewModel.activeHabits.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var editingHabit by remember { mutableStateOf<Habit?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Habitat - My Habits") })
+            TopAppBar(
+                title = { Text("Habitat") },
+                actions = {
+                    uiState.overallConsistency?.let { score ->
+                        Text(
+                            text = "Consistency: ${(score * 100).roundToInt()}%",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(end = 16.dp)
+                        )
+                    }
+                }
+            )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showCreateDialog = true }) {
@@ -57,7 +73,7 @@ fun HabitListScreen(
         },
         modifier = modifier
     ) { innerPadding ->
-        if (habits.isEmpty()) {
+        if (uiState.habitItems.isEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -84,11 +100,18 @@ fun HabitListScreen(
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
             ) {
-                items(habits, key = { it.id }) { habit ->
+                items(uiState.habitItems, key = { it.habit.id }) { item ->
                     HabitCard(
-                        habit = habit,
-                        onEdit = { editingHabit = habit },
-                        onArchive = { viewModel.archiveHabit(habit.id) }
+                        itemState = item,
+                        onCheckOff = { state ->
+                            if (item.todayCompletion?.state == state) {
+                                viewModel.removeCompletion(item.habit.id)
+                            } else {
+                                viewModel.toggleCheckOff(item.habit.id, state)
+                            }
+                        },
+                        onEdit = { editingHabit = item.habit },
+                        onArchive = { viewModel.archiveHabit(item.habit.id) }
                     )
                 }
             }
@@ -120,52 +143,116 @@ fun HabitListScreen(
 
 @Composable
 fun HabitCard(
-    habit: Habit,
+    itemState: HabitItemUiState,
+    onCheckOff: (CompletionState) -> Unit,
     onEdit: () -> Unit,
     onArchive: () -> Unit
 ) {
+    val habit = itemState.habit
+    val replay = itemState.replayResult
+    val isUnknown = habit.schedule is ScheduleType.Unknown
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp)
         ) {
-            Text(text = habit.emoji, fontSize = 28.sp)
-            Spacer(modifier = Modifier.padding(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = habit.emoji, fontSize = 28.sp)
+                Spacer(modifier = Modifier.padding(8.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = habit.name,
-                    style = MaterialTheme.typography.titleMedium
-                )
-
-                if (habit.minVersion.isNotBlank()) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Min: ${habit.minVersion}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.secondary
+                        text = habit.name,
+                        style = MaterialTheme.typography.titleMedium
                     )
+
+                    if (isUnknown) {
+                        Text(
+                            text = "⚠️ Needs app update",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    } else {
+                        if (habit.minVersion.isNotBlank()) {
+                            Text(
+                                text = "Min: ${habit.minVersion}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+
+                        if (habit.cue.isNotBlank()) {
+                            Text(
+                                text = "Cue: After I ${habit.cue}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
                 }
 
-                if (habit.cue.isNotBlank()) {
-                    Text(
-                        text = "Cue: After I ${habit.cue}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit Habit")
+                }
+
+                IconButton(onClick = onArchive) {
+                    Icon(Icons.Default.Archive, contentDescription = "Archive Habit")
                 }
             }
 
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit Habit")
-            }
+            if (!isUnknown) {
+                Spacer(modifier = Modifier.height(8.dp))
 
-            IconButton(onClick = onArchive) {
-                Icon(Icons.Default.Archive, contentDescription = "Archive Habit")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        replay.consistencyScore?.let { score ->
+                            Text(
+                                text = "Score: ${(score * 100).roundToInt()}%",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Text(
+                            text = "🔥 ${replay.currentStreak}d streak",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        if (replay.availableRestTokens > 0) {
+                            Text(
+                                text = "🛡️ ${replay.availableRestTokens}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(
+                            selected = itemState.todayCompletion?.state == CompletionState.DONE,
+                            onClick = { onCheckOff(CompletionState.DONE) },
+                            label = { Text("Done") }
+                        )
+                        FilterChip(
+                            selected = itemState.todayCompletion?.state == CompletionState.MINIMUM,
+                            onClick = { onCheckOff(CompletionState.MINIMUM) },
+                            label = { Text("Min") }
+                        )
+                        FilterChip(
+                            selected = itemState.todayCompletion?.state == CompletionState.SKIPPED,
+                            onClick = { onCheckOff(CompletionState.SKIPPED) },
+                            label = { Text("Skip") }
+                        )
+                    }
+                }
             }
         }
     }

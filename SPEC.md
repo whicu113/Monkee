@@ -41,11 +41,14 @@ Cue fires (reminder or widget) -> user does the tiny action -> checks it off -> 
 | group | optional (e.g. Morning Routine), orderable |
 | archived | soft delete |
 
+> **Note on Schedule Edits**: Editing a habit's schedule currently rewrites its historical schedule evaluation for replay and scoring.
+
 ### 4.2 Schedules
 - `DAILY`: repeat every day
 - `WEEKDAYS(set)`: chosen days of the week
 - `EVERY_N_DAYS(n)`: fixed anchor at the habit's start date
-- `N_PER_WEEK(n)`: available all week until `n` completions; its `n` occurrences resolve at week end (`min(c, n)` completions, `n - c` MISSED). Week start day is configurable, default Monday.
+- `N_PER_WEEK(n)`: available all week until `n` completions; its `n` occurrences resolve at week end (`min(c, n)` completions, `n - c` MISSED). Week start day is a global setting (default Monday). For a habit created mid-week, `n` is capped at the days remaining in that first week.
+- `UNKNOWN`: habits with an unrecognized schedule version. Excluded from replay and scoring (displayed as "needs app update"). Unknown schedule strings are preserved on save.
 
 ### 4.3 Day boundary
 A "day" ends at a user-configurable hour (default 04:00 local). All completions are attributed to a logical date, not a calendar date. Time comes from an injected `Clock`.
@@ -55,11 +58,11 @@ A "day" ends at a user-configurable hour (default 04:00 local). All completions 
 |---|---|---|---|
 | DONE | 1.0 | yes | 100% |
 | MINIMUM | 0.7 | yes | 60% |
-| SKIPPED (planned) | excluded from denominator | neutral (no break) | 0 |
+| SKIPPED (planned) | excluded from denominator | neutral (no break, no length) | 0 |
 | MISSED | 0 | see 5.2 | 0 |
 | PROTECTED (rest token used) | excluded | yes (preserved) | 0 |
 
-Unlogged scheduled days become MISSED at the next day boundary. Users can backfill the previous 7 days.
+Only user-logged states (`DONE`, `MINIMUM`, `SKIPPED`) are persisted. `MISSED` and `PROTECTED` are derived on replay. Today's logical date is pending: NOT `MISSED` and NOT in the consistency denominator unless logged. Users can backfill the previous 7 days in the UI; future dates are blocked.
 
 ## 5. Consistency instead of streaks
 
@@ -70,20 +73,21 @@ Per habit, over the trailing 30 scheduled occurrences (excluding SKIPPED/PROTECT
 score = sum(weight of each occurrence) / count(occurrences)      // weights from the table above
 ```
 
-Overall score = mean of active habit scores. This is the **headline number** on the home screen.
+Returns `null` when there are no resolved occurrences in the trailing 30 window.
+Overall score = mean of active habit scores with non-null consistency. This is the **headline number** on the home screen.
 
 ### 5.2 Streak (secondary, optional display)
-- A streak counts consecutive scheduled occurrences with DONE, MINIMUM or PROTECTED.
-- **Two-miss rule:** a single MISSED between completions does **not** break the streak; two consecutive MISSED do.
-- A setting "Strict streaks" makes any MISSED break it.
+- Streak length counts ONLY `DONE`, `MINIMUM`, and `PROTECTED`.
+- **Two-miss rule:** a single `MISSED` between completions neither adds to streak length nor resets it; two consecutive `MISSED` reset the streak to 0. `SKIPPED` is neutral.
+- A setting "Strict streaks" makes any `MISSED` reset the streak to 0.
 
 ### 5.3 Rest tokens
-- Earned: 1 token per 7 completed (DONE/MINIMUM) occurrences of that habit. Cap 3 per habit.
-- On a MISSED occurrence, if the habit has a token and "auto-use" is on, the occurrence becomes PROTECTED and one token is spent.
+- Earned: +1 progress per `DONE`/`MINIMUM` completion of that habit. Award +1 rest token at 7 progress points and reset progress to 0. Cap 3 tokens per habit. No progress accumulates while at the cap of 3 tokens.
+- On a `MISSED` occurrence, if the habit has ≥ 1 token and "auto-use" is on, the occurrence becomes `PROTECTED` and one token is spent.
 - Never purchasable. Never repairable after the fact.
 
 ### 5.4 Comeback bonus
-The first DONE/MINIMUM within 2 scheduled occurrences after a MISSED pays +50% Seeds and shows a short "back on track" message. Copy must be encouraging, never shaming.
+The first `DONE` or `MINIMUM` within 2 scheduled occurrences after a `MISSED` pays +50% Seeds and shows a short "back on track" message. `PROTECTED` does not trigger the comeback bonus. Computed at log time, not on replay. Copy must be encouraging, never shaming.
 
 ## 6. Economy
 

@@ -1,6 +1,8 @@
 package com.habitat.app.di
 
+import com.habitat.app.data.repository.CompletionRepositoryImpl
 import com.habitat.app.data.repository.HabitRepositoryImpl
+import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
 import dagger.Binds
 import dagger.Module
@@ -17,4 +19,10 @@ abstract class RepositoryModule {
     abstract fun bindHabitRepository(
         impl: HabitRepositoryImpl
     ): HabitRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindCompletionRepository(
+        impl: CompletionRepositoryImpl
+    ): CompletionRepository
 }

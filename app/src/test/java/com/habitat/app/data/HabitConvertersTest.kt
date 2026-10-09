@@ -40,9 +40,9 @@ class HabitConvertersTest {
 
     @Test
     fun `versioned v1 scheduleType nPerWeek conversion round trip`() {
-        val schedule = ScheduleType.NPerWeek(4, DayOfWeek.SUNDAY)
+        val schedule = ScheduleType.NPerWeek(4)
         val stringVal = converters.fromScheduleType(schedule)
-        assertEquals("v1:N_PER_WEEK:4:SUNDAY", stringVal)
+        assertEquals("v1:N_PER_WEEK:4", stringVal)
         val restored = converters.toScheduleType(stringVal)
         assertEquals(schedule, restored)
     }
@@ -57,19 +57,20 @@ class HabitConvertersTest {
         val expectedEveryN = ScheduleType.EveryNDays(4, LocalDate.of(2025, 1, 1))
         assertEquals(expectedEveryN, converters.toScheduleType("EVERY_N_DAYS:4:2025-01-01"))
 
-        val expectedNPerWeek = ScheduleType.NPerWeek(3, DayOfWeek.MONDAY)
+        val expectedNPerWeek = ScheduleType.NPerWeek(3)
         assertEquals(expectedNPerWeek, converters.toScheduleType("N_PER_WEEK:3:MONDAY"))
     }
 
     @Test
-    fun `unknown future versions safely fallback to Daily`() {
-        val restoredV2 = converters.toScheduleType("v2:SUPER_SCHEDULE_TYPE:1:2:3")
-        assertEquals(ScheduleType.Daily, restoredV2)
+    fun `unknown future versions safely convert to Unknown and preserve raw string`() {
+        val rawV2 = "v2:SUPER_SCHEDULE_TYPE:1:2:3"
+        val restoredV2 = converters.toScheduleType(rawV2)
+        assertEquals(ScheduleType.Unknown(rawV2), restoredV2)
+        assertEquals(rawV2, converters.fromScheduleType(restoredV2))
 
-        val restoredV99 = converters.toScheduleType("v99:UNKNOWN")
-        assertEquals(ScheduleType.Daily, restoredV99)
-
-        val malformed = converters.toScheduleType("INVALID_GARBAGE_STRING")
-        assertEquals(ScheduleType.Daily, malformed)
+        val rawV99 = "v99:UNKNOWN"
+        val restoredV99 = converters.toScheduleType(rawV99)
+        assertEquals(ScheduleType.Unknown(rawV99), restoredV99)
+        assertEquals(rawV99, converters.fromScheduleType(restoredV99))
     }
 }
