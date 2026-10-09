@@ -19,6 +19,8 @@ import java.time.LocalDate
 object NotificationHelper {
 
     const val CHANNEL_ID = "habit_reminders"
+    const val SUMMARY_NOTIFICATION_ID = 90000
+
     const val ACTION_DONE = "com.habitat.app.ACTION_DONE"
     const val ACTION_MINIMUM = "com.habitat.app.ACTION_MINIMUM"
     const val ACTION_SNOOZE = "com.habitat.app.ACTION_SNOOZE"
@@ -26,6 +28,14 @@ object NotificationHelper {
     const val EXTRA_HABIT_ID = "extra_habit_id"
     const val EXTRA_LOGICAL_DATE = "extra_logical_date"
     const val EXTRA_HABIT_NAME = "extra_habit_name"
+
+    /**
+     * Generates a deterministic positive integer code for PendingIntents.
+     */
+    fun deterministicCode(id: String, actionOffset: Int): Int {
+        val base = (id.hashCode() and 0x0FFF) * 10
+        return base + actionOffset
+    }
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -57,7 +67,7 @@ object NotificationHelper {
         }
         val contentPendingIntent = PendingIntent.getActivity(
             context,
-            habit.id.hashCode(),
+            deterministicCode(habit.id, 1),
             contentIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -70,7 +80,7 @@ object NotificationHelper {
         }
         val donePendingIntent = PendingIntent.getBroadcast(
             context,
-            (habit.id + "_done").hashCode(),
+            deterministicCode(habit.id, 2),
             doneIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -83,7 +93,7 @@ object NotificationHelper {
         }
         val minPendingIntent = PendingIntent.getBroadcast(
             context,
-            (habit.id + "_min").hashCode(),
+            deterministicCode(habit.id, 3),
             minIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -97,7 +107,7 @@ object NotificationHelper {
         }
         val snoozePendingIntent = PendingIntent.getBroadcast(
             context,
-            (habit.id + "_snooze").hashCode(),
+            deterministicCode(habit.id, 4),
             snoozeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -123,7 +133,7 @@ object NotificationHelper {
             .addAction(0, snoozeActionLabel, snoozePendingIntent)
             .build()
 
-        manager.notify(habit.id.hashCode(), notification)
+        manager.notify(deterministicCode(habit.id, 0), notification)
     }
 
     fun postSummaryNotification(
@@ -141,7 +151,7 @@ object NotificationHelper {
         }
         val contentPendingIntent = PendingIntent.getActivity(
             context,
-            99999,
+            SUMMARY_NOTIFICATION_ID,
             contentIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -158,11 +168,11 @@ object NotificationHelper {
             .setAutoCancel(true)
             .build()
 
-        manager.notify(99999, notification)
+        manager.notify(SUMMARY_NOTIFICATION_ID, notification)
     }
 
     fun cancelNotification(context: Context, habitId: String) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.cancel(habitId.hashCode())
+        manager.cancel(deterministicCode(habitId, 0))
     }
 }

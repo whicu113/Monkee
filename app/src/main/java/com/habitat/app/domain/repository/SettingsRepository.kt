@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 interface SettingsRepository {
     fun getSettings(): Flow<AppSettings>
     suspend fun updateSettings(settings: AppSettings)
-    suspend fun getDailyPostedCount(logicalDateString: String): Int
-    suspend fun incrementDailyPostedCount(logicalDateString: String)
+    suspend fun getPostedHabitIds(logicalDateString: String): Set<String>
+    suspend fun addPostedHabitId(logicalDateString: String, habitId: String)
+    suspend fun pruneOldPostedHabitIds(cutoffDateString: String)
 }

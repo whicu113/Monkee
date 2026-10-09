@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.habitat.app.domain.model.AppSettings
 import com.habitat.app.domain.repository.SettingsRepository
@@ -23,7 +24,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 @Singleton
 class SettingsRepositoryImpl @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : SettingsRepository {
 
     private object Keys {
@@ -62,16 +63,27 @@ class SettingsRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getDailyPostedCount(logicalDateString: String): Int {
-        val key = intPreferencesKey("posted_count_$logicalDateString")
-        return context.dataStore.data.first()[key] ?: 0
+    override suspend fun getPostedHabitIds(logicalDateString: String): Set<String> {
+        val key = stringSetPreferencesKey("posted_ids_$logicalDateString")
+        return context.dataStore.data.first()[key] ?: emptySet()
     }
 
-    override suspend fun incrementDailyPostedCount(logicalDateString: String) {
-        val key = intPreferencesKey("posted_count_$logicalDateString")
+    override suspend fun addPostedHabitId(logicalDateString: String, habitId: String) {
+        val key = stringSetPreferencesKey("posted_ids_$logicalDateString")
         context.dataStore.edit { prefs ->
-            val current = prefs[key] ?: 0
-            prefs[key] = current + 1
+            val current = prefs[key] ?: emptySet()
+            prefs[key] = current + habitId
+        }
+    }
+
+    override suspend fun pruneOldPostedHabitIds(cutoffDateString: String) {
+        context.dataStore.edit { prefs ->
+            val keysToRemove = prefs.asMap().keys.filter { key ->
+                key.name.startsWith("posted_ids_") && key.name.removePrefix("posted_ids_") < cutoffDateString
+            }
+            keysToRemove.forEach { key ->
+                prefs.remove(key)
+            }
         }
     }
 }

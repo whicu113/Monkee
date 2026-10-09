@@ -5,10 +5,13 @@ import com.habitat.app.domain.logic.ReminderEngine
 import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.model.ScheduleType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 
@@ -19,18 +22,47 @@ class ReminderEngineTest {
     private val quietEnd = LocalTime.of(7, 0)
 
     @Test
-    fun `nextTrigger defers to quiet hours end when reminder time is inside quiet hours`() {
+    fun `shouldPost table driven test`() {
+        val date = LocalDate.of(2025, 5, 12) // Monday
+        val dailyHabit = Habit(name = "Daily", schedule = ScheduleType.Daily)
+        val archivedHabit = Habit(name = "Archived", schedule = ScheduleType.Daily, archived = true)
+        val unknownHabit = Habit(name = "Unknown", schedule = ScheduleType.Unknown("v2:FUTURE"))
+        val tuesdayHabit = Habit(name = "Tuesday Only", schedule = ScheduleType.Weekdays(setOf(DayOfWeek.TUESDAY)))
+
+        // 1. Positive case
+        assertTrue(ReminderEngine.shouldPost(dailyHabit, isLoggedToday = false, isWeeklyQuotaMet = false, currentLogicalDate = date))
+
+        // 2. Archived habit -> false
+        assertFalse(ReminderEngine.shouldPost(archivedHabit, isLoggedToday = false, isWeeklyQuotaMet = false, currentLogicalDate = date))
+
+        // 3. Unknown schedule -> false
+        assertFalse(ReminderEngine.shouldPost(unknownHabit, isLoggedToday = false, isWeeklyQuotaMet = false, currentLogicalDate = date))
+
+        // 4. Not scheduled today -> false
+        assertFalse(ReminderEngine.shouldPost(tuesdayHabit, isLoggedToday = false, isWeeklyQuotaMet = false, currentLogicalDate = date))
+
+        // 5. Already logged today -> false
+        assertFalse(ReminderEngine.shouldPost(dailyHabit, isLoggedToday = true, isWeeklyQuotaMet = false, currentLogicalDate = date))
+
+        // 6. Weekly quota met -> false
+        assertFalse(ReminderEngine.shouldPost(dailyHabit, isLoggedToday = false, isWeeklyQuotaMet = true, currentLogicalDate = date))
+    }
+
+    @Test
+    fun `nextTrigger defers 2230 reminder to 0700 across 0400 boundary and derives logical date from fire instant`() {
         val habit = Habit(
             name = "Late Night Habit",
             schedule = ScheduleType.Daily,
-            reminderTime = LocalTime.of(23, 0)
+            reminderTime = LocalTime.of(22, 30)
         )
 
-        val fromInstant = Instant.parse("2025-05-01T10:00:00Z")
+        // Evaluate on May 1 at 20:00 UTC
+        val fromInstant = Instant.parse("2025-05-01T20:00:00Z")
         val trigger = ReminderEngine.nextTrigger(
             habit = habit,
             fromInstant = fromInstant,
             zoneId = zoneUtc,
+            dayBoundaryHour = 4,
             quietHoursStart = quietStart,
             quietHoursEnd = quietEnd
         )
@@ -38,8 +70,16 @@ class ReminderEngineTest {
         assertNotNull(trigger)
         val triggerZdt = trigger!!.atZone(zoneUtc)
 
+        // Fire instant is May 2 at 07:00 UTC
         assertEquals(LocalTime.of(7, 0), triggerZdt.toLocalTime())
-        assertEquals(2, triggerZdt.dayOfMonth)
+        assertEquals(LocalDate.of(2025, 5, 2), triggerZdt.toLocalDate())
+
+        // Calculate logical date at fire instant (07:00 on May 2 >= 04:00 boundary -> logical date May 2)
+        val clockAtFire = object : AppClock {
+            override fun instant() = trigger
+            override fun zoneId() = zoneUtc
+        }
+        assertEquals(LocalDate.of(2025, 5, 2), clockAtFire.logicalDate(4))
     }
 
     @Test
@@ -74,8 +114,6 @@ class ReminderEngineTest {
             )
         }
 
-        // Already posted 2 initial reminders today, cap = 4 -> 2 slots left
-        // With 3 due habits and 2 slots available, 1 slot is reserved for summary -> 1 individual + 1 summary (2 habits)
         val allocations = ReminderEngine.allocateDay(dueHabits = habits, alreadyPostedCount = 2, cap = 4)
 
         assertEquals(2, allocations.size)
@@ -150,10 +188,9 @@ class ReminderEngineTest {
         val habit = Habit(
             name = "Fall Back Habit",
             schedule = ScheduleType.Daily,
-            reminderTime = LocalTime.of(1, 30) // November 2, 2025 has two 01:30s
+            reminderTime = LocalTime.of(1, 30)
         )
 
-        // Evaluate on Nov 1, 2025
         val fromInstant = Instant.parse("2025-11-01T20:00:00Z")
         val trigger1 = ReminderEngine.nextTrigger(
             habit = habit,
@@ -165,7 +202,6 @@ class ReminderEngineTest {
 
         assertNotNull(trigger1)
 
-        // Evaluate immediately after trigger 1 fires
         val trigger2 = ReminderEngine.nextTrigger(
             habit = habit,
             fromInstant = trigger1!!.plusSeconds(60),
@@ -175,7 +211,6 @@ class ReminderEngineTest {
         )
 
         assertNotNull(trigger2)
-        // Next trigger moves forward to Nov 3 (does not loop infinitely during fall back)
         assertTrue(trigger2!! > trigger1)
     }
 
@@ -190,16 +225,13 @@ class ReminderEngineTest {
 
         var currentInstant = Instant.parse("2025-05-01T08:00:00Z")
 
-        // Day 1 trigger
         val trigger1 = ReminderEngine.nextTrigger(habit, currentInstant, zoneUtc, quietHoursStart = quietStart, quietHoursEnd = quietEnd)
         assertEquals(Instant.parse("2025-05-01T09:00:00Z"), trigger1)
 
-        // Day 2 trigger re-armed after Day 1 fires
         currentInstant = trigger1!!.plusSeconds(60)
         val trigger2 = ReminderEngine.nextTrigger(habit, currentInstant, zoneUtc, quietHoursStart = quietStart, quietHoursEnd = quietEnd)
         assertEquals(Instant.parse("2025-05-02T09:00:00Z"), trigger2)
 
-        // Day 3 trigger re-armed after Day 2 fires
         currentInstant = trigger2!!.plusSeconds(60)
         val trigger3 = ReminderEngine.nextTrigger(habit, currentInstant, zoneUtc, quietHoursStart = quietStart, quietHoursEnd = quietEnd)
         assertEquals(Instant.parse("2025-05-03T09:00:00Z"), trigger3)
