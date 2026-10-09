@@ -232,7 +232,7 @@ class ReminderEngineTest {
     }
 
     @Test
-    fun `nextTrigger in Europe Berlin during DST spring forward and fall back`() {
+    fun `nextTrigger in Europe Berlin DST spring forward with quiet hours disabled`() {
         val habitSpring = Habit(
             name = "Spring Habit",
             schedule = ScheduleType.Daily,
@@ -244,43 +244,91 @@ class ReminderEngineTest {
             habit = habitSpring,
             fromInstant = springFrom,
             zoneId = zoneBerlin,
-            quietHoursEnabled = false, // Disabled to test raw DST transition
+            quietHoursEnabled = false,
             quietHoursStart = quietStart,
             quietHoursEnd = quietEnd
         )
 
         assertNotNull(springTrigger)
         assertEquals(Instant.parse("2025-03-30T01:30:00Z"), springTrigger)
+    }
 
+    @Test
+    fun `nextTrigger in Europe Berlin DST fall back ambiguous time with quiet hours disabled`() {
         val habitFall = Habit(
             name = "Fall Habit",
             schedule = ScheduleType.Daily,
-            reminderTime = LocalTime.of(1, 30)
+            reminderTime = LocalTime.of(2, 30) // Ambiguous 02:30 on 2025-10-26 fall back
         )
 
         val fallFrom1 = Instant.parse("2025-10-25T20:00:00Z")
         val fallTrigger1 = ReminderEngine.nextTrigger(
-            habitFall,
-            fallFrom1,
-            zoneBerlin,
+            habit = habitFall,
+            fromInstant = fallFrom1,
+            zoneId = zoneBerlin,
             quietHoursEnabled = false,
             quietHoursStart = quietStart,
             quietHoursEnd = quietEnd
         )
         assertNotNull(fallTrigger1)
-        assertEquals(Instant.parse("2025-10-25T23:30:00Z"), fallTrigger1)
+        assertEquals(Instant.parse("2025-10-26T00:30:00Z"), fallTrigger1)
 
         val fallFrom2 = fallTrigger1!!.plusSeconds(60)
         val fallTrigger2 = ReminderEngine.nextTrigger(
-            habitFall,
-            fallFrom2,
-            zoneBerlin,
+            habit = habitFall,
+            fromInstant = fallFrom2,
+            zoneId = zoneBerlin,
             quietHoursEnabled = false,
             quietHoursStart = quietStart,
             quietHoursEnd = quietEnd
         )
         assertNotNull(fallTrigger2)
-        assertEquals(Instant.parse("2025-10-27T00:30:00Z"), fallTrigger2)
+        assertEquals(Instant.parse("2025-10-27T01:30:00Z"), fallTrigger2)
+    }
+
+    @Test
+    fun `nextTrigger returns exact time when outside quiet hours`() {
+        val habit = Habit(
+            name = "Morning Habit",
+            schedule = ScheduleType.Daily,
+            reminderTime = LocalTime.of(9, 0)
+        )
+
+        val fromInstant = Instant.parse("2025-05-01T08:00:00Z")
+        val trigger = ReminderEngine.nextTrigger(
+            habit = habit,
+            fromInstant = fromInstant,
+            zoneId = zoneUtc,
+            quietHoursEnabled = true,
+            quietHoursStart = quietStart,
+            quietHoursEnd = quietEnd
+        )
+
+        assertNotNull(trigger)
+        assertEquals(Instant.parse("2025-05-01T09:00:00Z"), trigger)
+    }
+
+    @Test
+    fun `consecutive triggers re-arm across 3 consecutive days`() {
+        val habit = Habit(
+            id = "h1",
+            name = "Daily Habit",
+            schedule = ScheduleType.Daily,
+            reminderTime = LocalTime.of(9, 0)
+        )
+
+        var currentInstant = Instant.parse("2025-05-01T08:00:00Z")
+
+        val trigger1 = ReminderEngine.nextTrigger(habit, currentInstant, zoneUtc, quietHoursEnabled = true, quietHoursStart = quietStart, quietHoursEnd = quietEnd)
+        assertEquals(Instant.parse("2025-05-01T09:00:00Z"), trigger1)
+
+        currentInstant = trigger1!!.plusSeconds(60)
+        val trigger2 = ReminderEngine.nextTrigger(habit, currentInstant, zoneUtc, quietHoursEnabled = true, quietHoursStart = quietStart, quietHoursEnd = quietEnd)
+        assertEquals(Instant.parse("2025-05-02T09:00:00Z"), trigger2)
+
+        currentInstant = trigger2!!.plusSeconds(60)
+        val trigger3 = ReminderEngine.nextTrigger(habit, currentInstant, zoneUtc, quietHoursEnabled = true, quietHoursStart = quietStart, quietHoursEnd = quietEnd)
+        assertEquals(Instant.parse("2025-05-03T09:00:00Z"), trigger3)
     }
 
     @Test

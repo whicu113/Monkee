@@ -96,6 +96,7 @@ class FakeAlarmGateway : AlarmGateway {
 
 class FakeSettingsRepository : SettingsRepository {
     private val state = MutableStateFlow(AppSettings())
+    private val postedMap = mutableMapOf<String, MutableSet<String>>()
 
     fun getSettingsValue(): AppSettings = state.value
 
@@ -105,11 +106,17 @@ class FakeSettingsRepository : SettingsRepository {
         state.value = settings
     }
 
-    override suspend fun getPostedHabitIds(logicalDateString: String): Set<String> = emptySet()
+    override suspend fun getPostedHabitIds(logicalDateString: String): Set<String> {
+        return postedMap[logicalDateString]?.toSet() ?: emptySet()
+    }
 
-    override suspend fun addPostedHabitId(logicalDateString: String, habitId: String) {}
+    override suspend fun addPostedHabitId(logicalDateString: String, habitId: String) {
+        postedMap.getOrPut(logicalDateString) { mutableSetOf() }.add(habitId)
+    }
 
-    override suspend fun pruneOldPostedHabitIds(cutoffDateString: String) {}
+    override suspend fun pruneOldPostedHabitIds(cutoffDateString: String) {
+        postedMap.keys.retainAll { it >= cutoffDateString }
+    }
 }
 
 class FakeHabitRepository : HabitRepository {
