@@ -35,4 +35,8 @@ class CompletionRepositoryImpl @Inject constructor(
     override suspend fun removeCompletion(habitId: String, logicalDate: LocalDate) {
         completionDao.deleteCompletion(habitId, logicalDate)
     }
+
+    override suspend fun getCompletion(habitId: String, logicalDate: LocalDate): LoggedCompletion? {
+        return completionDao.getCompletion(habitId, logicalDate)?.toDomainModel()
+    }
 }

@@ -9,4 +9,5 @@ interface CompletionRepository {
     fun getAllCompletions(): Flow<List<LoggedCompletion>>
     suspend fun logCompletion(completion: LoggedCompletion)
     suspend fun removeCompletion(habitId: String, logicalDate: LocalDate)
+    suspend fun getCompletion(habitId: String, logicalDate: LocalDate): LoggedCompletion?
 }

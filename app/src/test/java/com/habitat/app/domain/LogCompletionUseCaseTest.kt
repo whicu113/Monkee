@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.habitat.app.data.FakeCompletionDao
 import com.habitat.app.data.repository.CompletionRepositoryImpl
 import com.habitat.app.domain.model.CompletionState
+import com.habitat.app.domain.usecase.CompletionReminderHandler
 import com.habitat.app.domain.usecase.LogCompletionUseCase
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -18,6 +19,7 @@ import java.time.ZoneId
 class LogCompletionUseCaseTest {
 
     private lateinit var repository: CompletionRepositoryImpl
+    private lateinit var fakeHandler: FakeCompletionReminderHandler
     private lateinit var useCase: LogCompletionUseCase
 
     private val fixedToday = LocalDate.of(2025, 5, 10)
@@ -29,11 +31,12 @@ class LogCompletionUseCaseTest {
     @Before
     fun setUp() {
         repository = CompletionRepositoryImpl(FakeCompletionDao())
-        useCase = LogCompletionUseCase(repository, clock)
+        fakeHandler = FakeCompletionReminderHandler()
+        useCase = LogCompletionUseCase(repository, clock, fakeHandler)
     }
 
     @Test
-    fun `executeLog logs completion for today and past 7 days`() = runTest {
+    fun `executeLog logs completion for today and past 7 days and invokes reminder handler`() = runTest {
         val successToday = useCase.executeLog("h1", CompletionState.DONE, fixedToday)
         val successPast7 = useCase.executeLog("h1", CompletionState.MINIMUM, fixedToday.minusDays(7))
 
@@ -45,15 +48,40 @@ class LogCompletionUseCaseTest {
             assertEquals(2, list.size)
             cancelAndIgnoreRemainingEvents()
         }
+
+        assertEquals(2, fakeHandler.loggedCalls.size)
+        assertEquals("h1" to fixedToday, fakeHandler.loggedCalls[0])
+        assertEquals("h1" to fixedToday.minusDays(7), fakeHandler.loggedCalls[1])
     }
 
     @Test
-    fun `executeLog blocks future dates and dates older than 7 days`() = runTest {
+    fun `executeLog duplicate tap on same date results in one row, no error, and does not invoke handler twice`() = runTest {
+        val success1 = useCase.executeLog("h1", CompletionState.DONE, fixedToday)
+        assertTrue(success1)
+        assertEquals(1, fakeHandler.loggedCalls.size)
+
+        // Duplicate tap: same habit, date, and state
+        val success2 = useCase.executeLog("h1", CompletionState.DONE, fixedToday)
+        assertTrue(success2)
+
+        // Handler is NOT invoked a second time
+        assertEquals(1, fakeHandler.loggedCalls.size)
+
+        repository.getCompletionsForHabit("h1").test {
+            val list = awaitItem()
+            assertEquals(1, list.size)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `executeLog blocks future dates and dates older than 7 days without invoking handler`() = runTest {
         val futureSuccess = useCase.executeLog("h1", CompletionState.DONE, fixedToday.plusDays(1))
         val oldSuccess = useCase.executeLog("h1", CompletionState.DONE, fixedToday.minusDays(8))
 
         assertFalse(futureSuccess)
         assertFalse(oldSuccess)
+        assertEquals(0, fakeHandler.loggedCalls.size)
 
         repository.getCompletionsForHabit("h1").test {
             val list = awaitItem()
@@ -72,5 +100,13 @@ class LogCompletionUseCaseTest {
             assertEquals(0, list.size)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+}
+
+class FakeCompletionReminderHandler : CompletionReminderHandler {
+    val loggedCalls = mutableListOf<Pair<String, LocalDate>>()
+
+    override suspend fun onCompletionLogged(habitId: String, logicalDate: LocalDate) {
+        loggedCalls.add(habitId to logicalDate)
     }
 }

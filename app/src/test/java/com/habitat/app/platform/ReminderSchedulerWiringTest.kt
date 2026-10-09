@@ -134,4 +134,6 @@ class FakeHabitRepository : HabitRepository {
     }
 }
 
-class DummyContext : android.content.ContextWrapper(null)
+class DummyContext : android.content.ContextWrapper(null) {
+    override fun getSystemService(name: String): Any? = null
+}

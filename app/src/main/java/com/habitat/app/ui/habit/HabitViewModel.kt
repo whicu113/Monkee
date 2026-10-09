@@ -141,11 +141,7 @@ class HabitViewModel @Inject constructor(
 
     fun toggleCheckOff(habitId: String, state: CompletionState, date: LocalDate) {
         viewModelScope.launch {
-            val success = logCompletionUseCase.executeLog(habitId, state, date)
-            if (success) {
-                NotificationHelper.cancelNotification(context, habitId)
-                ReminderScheduler.cancelAlarm(context, habitId)
-            }
+            logCompletionUseCase.executeLog(habitId, state, date)
         }
     }
 

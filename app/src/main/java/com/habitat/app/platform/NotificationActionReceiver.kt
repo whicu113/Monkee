@@ -35,13 +35,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 when (intent.action) {
                     NotificationHelper.ACTION_DONE -> {
                         logCompletionUseCase.executeLog(habitId, CompletionState.DONE, logicalDate)
-                        NotificationHelper.cancelNotification(context, habitId)
-                        ReminderScheduler.cancelAlarm(context, habitId)
                     }
                     NotificationHelper.ACTION_MINIMUM -> {
                         logCompletionUseCase.executeLog(habitId, CompletionState.MINIMUM, logicalDate)
-                        NotificationHelper.cancelNotification(context, habitId)
-                        ReminderScheduler.cancelAlarm(context, habitId)
                     }
                     NotificationHelper.ACTION_SNOOZE -> {
                         NotificationHelper.cancelNotification(context, habitId)

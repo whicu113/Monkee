@@ -14,12 +14,14 @@ import javax.inject.Inject
  */
 class LogCompletionUseCase @Inject constructor(
     private val completionRepository: CompletionRepository,
-    private val clock: AppClock
+    private val clock: AppClock,
+    private val reminderHandler: CompletionReminderHandler
 ) {
 
     /**
      * Logs or updates a completion entry for [habitId] on [logicalDate].
      * Blocked if [logicalDate] is in the future or older than 7 logical days.
+     * Invokes [reminderHandler.onCompletionLogged] only after a successful new log (not on rejected or duplicate taps).
      */
     suspend fun executeLog(
         habitId: String,
@@ -31,6 +33,12 @@ class LogCompletionUseCase @Inject constructor(
             return false
         }
 
+        val existing = completionRepository.getCompletion(habitId, logicalDate)
+        if (existing?.state == state) {
+            // Duplicate tap: one row, no error, handler not called twice
+            return true
+        }
+
         completionRepository.logCompletion(
             LoggedCompletion(
                 habitId = habitId,
@@ -38,6 +46,7 @@ class LogCompletionUseCase @Inject constructor(
                 state = state
             )
         )
+        reminderHandler.onCompletionLogged(habitId, logicalDate)
         return true
     }
 

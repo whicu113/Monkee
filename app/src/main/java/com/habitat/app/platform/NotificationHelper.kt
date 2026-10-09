@@ -171,7 +171,7 @@ object NotificationHelper {
     }
 
     fun cancelNotification(context: Context, habitId: String) {
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.cancel(habitId, HABIT_NOTIFICATION_ID)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        manager?.cancel(habitId, HABIT_NOTIFICATION_ID)
     }
 }
