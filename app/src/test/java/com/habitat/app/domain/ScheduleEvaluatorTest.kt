@@ -20,6 +20,7 @@ class ScheduleEvaluatorTest {
 
         assertTrue(ScheduleEvaluator.isScheduledOn(schedule, date))
         assertTrue(ScheduleEvaluator.isScheduledOn(schedule, date.plusDays(1)))
+        assertTrue(ScheduleEvaluator.isDueOn(schedule, date))
     }
 
     @Test
@@ -38,7 +39,7 @@ class ScheduleEvaluatorTest {
     }
 
     @Test
-    fun `every n days schedule calculates correctly from start date`() {
+    fun `every n days schedule calculates correctly from fixed anchor start date`() {
         val startDate = LocalDate.of(2025, 5, 1)
         val schedule = ScheduleType.EveryNDays(n = 3, startDate = startDate)
 
@@ -56,25 +57,67 @@ class ScheduleEvaluatorTest {
     }
 
     @Test
-    fun `n per week schedule returns true for all days`() {
+    fun `n per week schedule availability resolves based on completions this week`() {
         val schedule = ScheduleType.NPerWeek(n = 3, startOfWeekDay = DayOfWeek.MONDAY)
         val anyDate = LocalDate.of(2025, 5, 12)
 
         assertTrue(ScheduleEvaluator.isScheduledOn(schedule, anyDate))
+
+        // Available when completions < n
+        assertTrue(ScheduleEvaluator.isDueOn(schedule, anyDate, completionsThisWeek = 0))
+        assertTrue(ScheduleEvaluator.isDueOn(schedule, anyDate, completionsThisWeek = 2))
+
+        // No longer due once target completions (n) reached
+        assertFalse(ScheduleEvaluator.isDueOn(schedule, anyDate, completionsThisWeek = 3))
+        assertFalse(ScheduleEvaluator.isDueOn(schedule, anyDate, completionsThisWeek = 4))
     }
 
     @Test
-    fun `logical date calculation around 0400 day boundary`() {
-        val clock0359 = object : AppClock {
-            override fun instant() = Instant.parse("2025-05-12T03:59:00Z")
-            override fun zoneId() = ZoneId.of("UTC")
-        }
-        val clock0400 = object : AppClock {
-            override fun instant() = Instant.parse("2025-05-12T04:00:00Z")
+    fun `start of week is configurable`() {
+        val wednesday = LocalDate.of(2025, 5, 14)
+
+        val mondayStart = ScheduleEvaluator.startOfWeek(wednesday, DayOfWeek.MONDAY)
+        assertEquals(LocalDate.of(2025, 5, 12), mondayStart) // Mon May 12
+
+        val sundayStart = ScheduleEvaluator.startOfWeek(wednesday, DayOfWeek.SUNDAY)
+        assertEquals(LocalDate.of(2025, 5, 11), sundayStart) // Sun May 11
+    }
+
+    @Test
+    fun `completion at 0330 AM belongs to previous logical date`() {
+        val clock0330 = object : AppClock {
+            override fun instant() = Instant.parse("2025-05-12T03:30:00Z")
             override fun zoneId() = ZoneId.of("UTC")
         }
 
-        assertEquals(LocalDate.of(2025, 5, 11), clock0359.logicalDate(4))
-        assertEquals(LocalDate.of(2025, 5, 12), clock0400.logicalDate(4))
+        assertEquals(LocalDate.of(2025, 5, 11), clock0330.logicalDate(4))
+    }
+
+    @Test
+    fun `DST transitions preserve 0400 boundary logical date correctly`() {
+        val nyZone = ZoneId.of("America/New_York")
+
+        // Spring forward day: March 9, 2025 (clocks jump 02:00 -> 03:00)
+        // 03:30 AM EST (07:30 UTC) -> logically belongs to March 8th because 03:30 < 04:00 boundary
+        val springClock0330 = object : AppClock {
+            override fun instant() = Instant.parse("2025-03-09T07:30:00Z")
+            override fun zoneId() = nyZone
+        }
+        assertEquals(LocalDate.of(2025, 3, 8), springClock0330.logicalDate(4))
+
+        // 04:15 AM EDT (08:15 UTC) -> logically belongs to March 9th because 04:15 >= 04:00
+        val springClock0415 = object : AppClock {
+            override fun instant() = Instant.parse("2025-03-09T08:15:00Z")
+            override fun zoneId() = nyZone
+        }
+        assertEquals(LocalDate.of(2025, 3, 9), springClock0415.logicalDate(4))
+
+        // Fall back day: November 2, 2025 (clocks fall back 02:00 -> 01:00)
+        // 03:30 AM EST (08:30 UTC) -> logically belongs to Nov 1st
+        val fallClock0330 = object : AppClock {
+            override fun instant() = Instant.parse("2025-11-02T08:30:00Z")
+            override fun zoneId() = nyZone
+        }
+        assertEquals(LocalDate.of(2025, 11, 1), fallClock0330.logicalDate(4))
     }
 }

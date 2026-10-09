@@ -6,11 +6,15 @@ import androidx.room.TypeConverters
 import com.habitat.app.data.local.converters.HabitConverters
 
 @Database(
-    entities = [HabitEntity::class],
+    entities = [
+        HabitEntity::class,
+        HabitGroupEntity::class
+    ],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 @TypeConverters(HabitConverters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
+    abstract fun habitGroupDao(): HabitGroupDao
 }

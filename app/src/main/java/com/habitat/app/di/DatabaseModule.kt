@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.habitat.app.data.local.AppDatabase
 import com.habitat.app.data.local.HabitDao
+import com.habitat.app.data.local.HabitGroupDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -30,5 +31,10 @@ object DatabaseModule {
     @Provides
     fun provideHabitDao(database: AppDatabase): HabitDao {
         return database.habitDao()
+    }
+
+    @Provides
+    fun provideHabitGroupDao(database: AppDatabase): HabitGroupDao {
+        return database.habitGroupDao()
     }
 }

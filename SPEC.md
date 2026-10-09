@@ -42,10 +42,10 @@ Cue fires (reminder or widget) -> user does the tiny action -> checks it off -> 
 | archived | soft delete |
 
 ### 4.2 Schedules
-- `DAILY`
+- `DAILY`: repeat every day
 - `WEEKDAYS(set)`: chosen days of the week
-- `EVERY_N_DAYS(n)`
-- `N_PER_WEEK(n)`: any n days within a Monday-start (configurable) week
+- `EVERY_N_DAYS(n)`: fixed anchor at the habit's start date
+- `N_PER_WEEK(n)`: available all week until `n` completions; its `n` occurrences resolve at week end (`min(c, n)` completions, `n - c` MISSED). Week start day is configurable, default Monday.
 
 ### 4.3 Day boundary
 A "day" ends at a user-configurable hour (default 04:00 local). All completions are attributed to a logical date, not a calendar date. Time comes from an injected `Clock`.
