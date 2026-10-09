@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneId
 import javax.inject.Inject
 
 /**
@@ -87,6 +86,7 @@ class ReminderReceiver : BroadcastReceiver() {
                     scheduledInstant = scheduledInstant,
                     nowInstant = clock.instant(),
                     zoneId = clock.zoneId(),
+                    quietHoursEnabled = settings.quietHoursEnabled,
                     quietHoursStart = settings.quietHoursStart,
                     quietHoursEnd = settings.quietHoursEnd,
                     isLoggedToday = isLoggedToday,

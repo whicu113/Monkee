@@ -29,6 +29,7 @@ class SettingsRepositoryImpl @Inject constructor(
 
     private object Keys {
         val DAY_BOUNDARY = intPreferencesKey("day_boundary_hour")
+        val QUIET_ENABLED = booleanPreferencesKey("quiet_hours_enabled")
         val QUIET_START = stringPreferencesKey("quiet_hours_start")
         val QUIET_END = stringPreferencesKey("quiet_hours_end")
         val SNOOZE_LENGTH = intPreferencesKey("snooze_length_minutes")
@@ -41,6 +42,7 @@ class SettingsRepositoryImpl @Inject constructor(
         return context.dataStore.data.map { prefs ->
             AppSettings(
                 dayBoundaryHour = prefs[Keys.DAY_BOUNDARY] ?: 4,
+                quietHoursEnabled = prefs[Keys.QUIET_ENABLED] ?: true,
                 quietHoursStart = prefs[Keys.QUIET_START]?.let { LocalTime.parse(it) } ?: LocalTime.of(22, 0),
                 quietHoursEnd = prefs[Keys.QUIET_END]?.let { LocalTime.parse(it) } ?: LocalTime.of(7, 0),
                 snoozeLengthMinutes = prefs[Keys.SNOOZE_LENGTH] ?: 30,
@@ -54,6 +56,7 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun updateSettings(settings: AppSettings) {
         context.dataStore.edit { prefs ->
             prefs[Keys.DAY_BOUNDARY] = settings.dayBoundaryHour
+            prefs[Keys.QUIET_ENABLED] = settings.quietHoursEnabled
             prefs[Keys.QUIET_START] = settings.quietHoursStart.toString()
             prefs[Keys.QUIET_END] = settings.quietHoursEnd.toString()
             prefs[Keys.SNOOZE_LENGTH] = settings.snoozeLengthMinutes

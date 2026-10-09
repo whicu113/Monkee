@@ -9,6 +9,7 @@ import java.time.LocalTime
  */
 data class AppSettings(
     val dayBoundaryHour: Int = 4,
+    val quietHoursEnabled: Boolean = true,
     val quietHoursStart: LocalTime = LocalTime.of(22, 0),
     val quietHoursEnd: LocalTime = LocalTime.of(7, 0),
     val snoozeLengthMinutes: Int = 30,

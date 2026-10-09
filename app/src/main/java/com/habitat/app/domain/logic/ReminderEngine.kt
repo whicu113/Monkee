@@ -9,8 +9,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
-import java.time.ZonedDateTime
-import kotlin.math.max
 
 enum class DropReason {
     Archived,
@@ -43,7 +41,6 @@ object ReminderEngine {
 
     /**
      * Evaluates the decision on whether to Post, Summary, or Drop a habit reminder at fire time.
-     * Pure domain logic.
      * SPEC Section 8.1.
      */
     fun evaluateFireTimeDecision(
@@ -51,6 +48,7 @@ object ReminderEngine {
         scheduledInstant: Instant,
         nowInstant: Instant,
         zoneId: ZoneId,
+        quietHoursEnabled: Boolean,
         quietHoursStart: LocalTime,
         quietHoursEnd: LocalTime,
         isLoggedToday: Boolean,
@@ -70,7 +68,7 @@ object ReminderEngine {
         }
 
         val nowTime = nowInstant.atZone(zoneId).toLocalTime()
-        if (isInsideQuietHours(nowTime, quietHoursStart, quietHoursEnd)) {
+        if (isInsideQuietHours(nowTime, quietHoursStart, quietHoursEnd, enabled = quietHoursEnabled)) {
             return FireDecision.Drop(DropReason.QuietHours)
         }
 
@@ -87,7 +85,6 @@ object ReminderEngine {
 
     /**
      * Determines whether a reminder should be posted for [habit] on [currentLogicalDate].
-     * Suppresses if archived, unknown schedule, not scheduled today, already logged today, or weekly quota met.
      * SPEC Section 8.1.
      */
     fun shouldPost(
@@ -141,6 +138,7 @@ object ReminderEngine {
         fromInstant: Instant,
         zoneId: ZoneId,
         dayBoundaryHour: Int = 4,
+        quietHoursEnabled: Boolean = true,
         quietHoursStart: LocalTime = LocalTime.of(22, 0),
         quietHoursEnd: LocalTime = LocalTime.of(7, 0)
     ): Instant? {
@@ -155,7 +153,7 @@ object ReminderEngine {
             if (ScheduleEvaluator.isScheduledOn(habit.schedule, candidateDate)) {
                 var localDateTime = LocalDateTime.of(candidateDate, reminderTime)
 
-                if (isInsideQuietHours(reminderTime, quietHoursStart, quietHoursEnd)) {
+                if (isInsideQuietHours(reminderTime, quietHoursStart, quietHoursEnd, enabled = quietHoursEnabled)) {
                     localDateTime = LocalDateTime.of(candidateDate, quietHoursEnd)
                     if (quietHoursStart > quietHoursEnd && reminderTime >= quietHoursStart) {
                         localDateTime = LocalDateTime.of(candidateDate.plusDays(1), quietHoursEnd)
@@ -179,9 +177,10 @@ object ReminderEngine {
     fun isInsideQuietHours(
         time: LocalTime,
         start: LocalTime,
-        end: LocalTime
+        end: LocalTime,
+        enabled: Boolean = true
     ): Boolean {
-        if (start == end) return false // Quiet hours disabled
+        if (!enabled) return false
         return if (start < end) {
             time >= start && time < end
         } else {
@@ -207,13 +206,13 @@ object ReminderEngine {
         )
 
         val totalToSchedule = sorted.size
-        val availableCapacity = max(0, cap - alreadyPostedCount)
+        val availableCapacity = kotlin.math.max(0, cap - alreadyPostedCount)
 
         if (totalToSchedule <= availableCapacity) {
             return sorted.map { ReminderAllocation.Individual(it) }
         }
 
-        val individualSlots = max(0, availableCapacity - 1)
+        val individualSlots = kotlin.math.max(0, availableCapacity - 1)
         val result = mutableListOf<ReminderAllocation>()
 
         val individualHabits = sorted.take(individualSlots)

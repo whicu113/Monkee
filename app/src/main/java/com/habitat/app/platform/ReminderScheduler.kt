@@ -67,6 +67,7 @@ object ReminderScheduler {
             habit = habit,
             fromInstant = fromInstant,
             zoneId = zoneId,
+            quietHoursEnabled = appSettings.quietHoursEnabled,
             quietHoursStart = appSettings.quietHoursStart,
             quietHoursEnd = appSettings.quietHoursEnd
         )
@@ -111,7 +112,6 @@ object ReminderScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Inexact alarms are used by default to preserve device battery life per Android/Play policy guidelines
         alarmManager.setAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
             triggerAtMillis,
