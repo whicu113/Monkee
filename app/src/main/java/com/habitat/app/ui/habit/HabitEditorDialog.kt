@@ -10,11 +10,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,7 +35,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HabitEditorDialog(
     habit: Habit? = null,
@@ -45,7 +49,8 @@ fun HabitEditorDialog(
     var minVersion by remember { mutableStateOf(habit?.minVersion ?: "") }
     var identity by remember { mutableStateOf(habit?.identity ?: "") }
     var difficulty by remember { mutableStateOf(habit?.difficulty ?: Difficulty.EASY) }
-    var reminderTimeStr by remember { mutableStateOf(habit?.reminderTime?.toString() ?: "09:00") }
+    var reminderTime by remember { mutableStateOf<LocalTime?>(habit?.reminderTime) }
+    var showTimePicker by remember { mutableStateOf(false) }
 
     var scheduleTypeOption by remember {
         mutableStateOf(
@@ -79,35 +84,6 @@ fun HabitEditorDialog(
     }
 
     var nameError by remember { mutableStateOf(value = false) }
-    var timeError by remember { mutableStateOf<String?>(null) }
-    var timeWarning by remember { mutableStateOf<String?>(null) }
-
-    fun validateTime(timeStr: String): LocalTime? {
-        val parsed = try { LocalTime.parse(timeStr) } catch (_: Exception) { null }
-        if (parsed == null) {
-            timeError = "Invalid time format (use HH:mm)"
-            timeWarning = null
-            return null
-        }
-
-        // Block reminder times before 04:00 boundary (00:00 to 04:00)
-        if (parsed >= LocalTime.MIDNIGHT && parsed < LocalTime.of(4, 0)) {
-            timeError = "Reminder times before 04:00 day boundary are not allowed"
-            timeWarning = null
-            return null
-        }
-
-        timeError = null
-
-        // Check if inside quiet hours (22:00 to 07:00)
-        if (ReminderEngine.isInsideQuietHours(parsed, LocalTime.of(22, 0), LocalTime.of(7, 0))) {
-            timeWarning = "⚠️ Time falls in quiet hours (22:00-07:00). Reminder will deliver at 07:00."
-        } else {
-            timeWarning = null
-        }
-
-        return parsed
-    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -144,24 +120,48 @@ fun HabitEditorDialog(
                     )
                 }
 
-                OutlinedTextField(
-                    value = reminderTimeStr,
-                    onValueChange = {
-                        reminderTimeStr = it
-                        validateTime(it)
-                    },
-                    label = { Text("Reminder Time (HH:mm)") },
-                    isError = timeError != null,
-                    supportingText = {
-                        when {
-                            timeError != null -> Text(timeError!!, color = MaterialTheme.colorScheme.error)
-                            timeWarning != null -> Text(timeWarning!!, color = MaterialTheme.colorScheme.tertiary)
-                            else -> Text("Note: Reminder times are approximate to preserve battery life.", style = MaterialTheme.typography.bodySmall)
-                        }
-                    },
+                // Reminder Time Selection
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Reminder Time", style = MaterialTheme.typography.bodyMedium)
+                        val timeDisplay = reminderTime?.let {
+                            "${String.format("%02d:%02d", it.hour, it.minute)} (approximate)"
+                        } ?: "None (no reminder)"
+                        Text(
+                            text = timeDisplay,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (reminderTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                        )
+                        if (reminderTime != null && ReminderEngine.isInsideQuietHours(reminderTime!!, LocalTime.of(22, 0), LocalTime.of(7, 0))) {
+                            Text(
+                                text = "⚠️ Falls in quiet hours (22:00-07:00). Reminder will deliver at 07:00.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        } else {
+                            Text(
+                                text = "Note: Reminder times are approximate to preserve battery life.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (reminderTime != null) {
+                            OutlinedButton(onClick = { reminderTime = null }) {
+                                Text("Clear")
+                            }
+                        }
+                        Button(onClick = { showTimePicker = true }) {
+                            Text(if (reminderTime == null) "Set Time" else "Change")
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = cue,
@@ -288,9 +288,6 @@ fun HabitEditorDialog(
                         return@Button
                     }
 
-                    val validatedTime = validateTime(reminderTimeStr)
-                    if (timeError != null) return@Button
-
                     val finalSchedule: ScheduleType = when (scheduleTypeOption) {
                         "WEEKDAYS" -> ScheduleType.Weekdays(selectedWeekdays)
                         "EVERY_N" -> ScheduleType.EveryNDays(
@@ -310,7 +307,7 @@ fun HabitEditorDialog(
                         fullVersion = fullVersion.trim(),
                         minVersion = minVersion.trim(),
                         identity = identity.trim(),
-                        reminderTime = validatedTime,
+                        reminderTime = reminderTime,
                         difficulty = difficulty,
                         schedule = finalSchedule
                     )
@@ -327,4 +324,31 @@ fun HabitEditorDialog(
             }
         }
     )
+
+    if (showTimePicker) {
+        val initialTime = reminderTime ?: LocalTime.of(9, 0)
+        val pickerState = rememberTimePickerState(
+            initialHour = initialTime.hour,
+            initialMinute = initialTime.minute,
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            title = { Text("Select Reminder Time") },
+            text = { TimePicker(state = pickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showTimePicker = false
+                    reminderTime = LocalTime.of(pickerState.hour, pickerState.minute)
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
