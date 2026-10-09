@@ -8,11 +8,11 @@ Habitat is an Android-first, local-first, gamified habit tracker written in Kotl
 ## Stack
 - Kotlin, Jetpack Compose, Material 3
 - Room (SQLite) for storage, DataStore for simple settings
-- WorkManager for background work, AlarmManager for exact reminders
+- AlarmManager for inexact battery-efficient reminders
 - Glance for widgets
 - Hilt for dependency injection
-- JUnit 5 (or JUnit 4 if the toolchain requires it) for unit tests; Turbine for Flow tests
-- minSdk 26. Handle Android 12+ exact-alarm permission and Android 13+ notification permission.
+- JUnit 4 for unit tests; Turbine for Flow tests
+- minSdk 26. Handle Android 13+ notification permission (`POST_NOTIFICATIONS`).
 
 Do not add a new dependency without asking. Pin all versions in the version catalog.
 
@@ -60,7 +60,6 @@ Rules:
 - Cap daily earnings exactly as in SPEC 6.3.
 
 ## Commands
-Fill these in once the project exists:
 ```
 ./gradlew assembleDebug
 ./gradlew test
