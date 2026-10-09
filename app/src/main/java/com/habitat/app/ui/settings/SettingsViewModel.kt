@@ -37,7 +37,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.updateSettings(newSettings)
             // Reconcile reminders when quiet hours or settings change
-            ReminderScheduler.reconcile(context, habitRepository, completionRepository, clock, newSettings)
+            ReminderScheduler.reconcile(context, habitRepository, completionRepository, settingsRepository, clock)
         }
     }
 }

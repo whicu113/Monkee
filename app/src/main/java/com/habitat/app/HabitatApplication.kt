@@ -4,6 +4,7 @@ import android.app.Application
 import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
+import com.habitat.app.domain.repository.SettingsRepository
 import com.habitat.app.platform.NotificationHelper
 import com.habitat.app.platform.ReminderScheduler
 import dagger.hilt.android.HiltAndroidApp
@@ -19,6 +20,9 @@ class HabitatApplication : Application() {
     lateinit var completionRepository: CompletionRepository
 
     @Inject
+    lateinit var settingsRepository: SettingsRepository
+
+    @Inject
     lateinit var clock: AppClock
 
     override fun onCreate() {
@@ -32,6 +36,7 @@ class HabitatApplication : Application() {
             context = this,
             habitRepository = habitRepository,
             completionRepository = completionRepository,
+            settingsRepository = settingsRepository,
             clock = clock
         )
     }

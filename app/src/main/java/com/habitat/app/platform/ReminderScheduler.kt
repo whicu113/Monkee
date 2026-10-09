@@ -11,6 +11,7 @@ import com.habitat.app.domain.model.AppSettings
 import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
+import com.habitat.app.domain.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -20,23 +21,25 @@ import java.time.ZoneId
 
 /**
  * Reconciles and schedules habit reminders using inexact alarms for battery efficiency.
+ * Always fetches the latest persisted AppSettings from SettingsRepository.
  * SPEC Section 8.1.
  */
 object ReminderScheduler {
 
     /**
      * Idempotently reconciles alarms for active habits.
+     * Fetches current [AppSettings] directly from [settingsRepository].
      * Called on app startup, boot, app update, habit/settings edit, and time/timezone change.
-     * Does NOT post notifications directly.
      */
     fun reconcile(
         context: Context,
         habitRepository: HabitRepository,
         completionRepository: CompletionRepository,
-        clock: AppClock,
-        appSettings: AppSettings = AppSettings()
+        settingsRepository: SettingsRepository,
+        clock: AppClock
     ) {
         CoroutineScope(Dispatchers.IO).launch {
+            val appSettings = settingsRepository.getSettings().first()
             val habits = habitRepository.getActiveHabits().first()
             val nowInstant = clock.instant()
             val zoneId = clock.zoneId()
@@ -61,7 +64,7 @@ object ReminderScheduler {
         habit: Habit,
         fromInstant: java.time.Instant,
         zoneId: ZoneId,
-        appSettings: AppSettings = AppSettings()
+        appSettings: AppSettings
     ) {
         val nextTrigger = ReminderEngine.nextTrigger(
             habit = habit,
@@ -88,6 +91,18 @@ object ReminderScheduler {
         val triggerAtMillis = System.currentTimeMillis() + (snoozeMinutes * 60 * 1000L)
         val intentExtraDate = logicalDate.toString()
         scheduleAlarm(context, habitId, "snooze_alarm", triggerAtMillis, intentExtraDate)
+    }
+
+    fun isAlarmScheduled(context: Context, habitId: String, actionPath: String = "alarm"): Boolean {
+        val intent = Intent(context, ReminderReceiver::class.java).apply {
+            data = Uri.parse("habitat://reminder/$habitId/$actionPath")
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            0,
+            intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        ) != null
     }
 
     private fun scheduleAlarm(
@@ -128,8 +143,10 @@ object ReminderScheduler {
             context,
             0,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        alarmManager.cancel(pendingIntent)
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )?.also {
+            alarmManager.cancel(it)
+            it.cancel()
+        }
     }
 }

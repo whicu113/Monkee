@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.SystemAppClock
+import com.habitat.app.domain.logic.ReminderEngine
 import com.habitat.app.domain.logic.ReplayEngine
 import com.habitat.app.domain.logic.ReplayResult
 import com.habitat.app.domain.model.CompletionState
@@ -32,7 +33,9 @@ data class HabitItemUiState(
     val habit: Habit,
     val replayResult: ReplayResult,
     val selectedDateState: OccurrenceState,
-    val selectedDateCompletion: LoggedCompletion?
+    val selectedDateCompletion: LoggedCompletion?,
+    val isArmed: Boolean = false,
+    val nextTriggerFormatted: String? = null
 )
 
 data class HabitListUiState(
@@ -42,12 +45,13 @@ data class HabitListUiState(
     val selectedDate: LocalDate = LocalDate.now(),
     val availableDates: List<LocalDate> = emptyList(),
     val debugShiftedDays: Long = 0,
-    val debugShiftedHours: Long = 0
+    val debugShiftedHours: Long = 0,
+    val quietHoursEnabled: Boolean = true
 )
 
 @HiltViewModel
 class HabitViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val habitRepository: HabitRepository,
     private val completionRepository: CompletionRepository,
     private val settingsRepository: SettingsRepository,
@@ -90,11 +94,24 @@ class HabitViewModel @Inject constructor(
             val selectedComp = habitCompletions.find { it.logicalDate == clampedSelectedDate }
             val dateState = replay.occurrenceStates[clampedSelectedDate] ?: OccurrenceState.PENDING
 
+            val isArmed = ReminderScheduler.isAlarmScheduled(context, habit.id)
+            val nextTriggerInstant = ReminderEngine.nextTrigger(
+                habit = habit,
+                fromInstant = clock.instant(),
+                zoneId = clock.zoneId(),
+                quietHoursEnabled = settings.quietHoursEnabled,
+                quietHoursStart = settings.quietHoursStart,
+                quietHoursEnd = settings.quietHoursEnd
+            )
+            val formattedNextTrigger = nextTriggerInstant?.atZone(clock.zoneId())?.toString()
+
             HabitItemUiState(
                 habit = habit,
                 replayResult = replay,
                 selectedDateState = dateState,
-                selectedDateCompletion = selectedComp
+                selectedDateCompletion = selectedComp,
+                isArmed = isArmed,
+                nextTriggerFormatted = formattedNextTrigger
             )
         }
 
@@ -106,7 +123,8 @@ class HabitViewModel @Inject constructor(
             overallConsistency = overall,
             currentLogicalDate = today,
             selectedDate = clampedSelectedDate,
-            availableDates = availableDates
+            availableDates = availableDates,
+            quietHoursEnabled = settings.quietHoursEnabled
         )
     }.stateIn(
         scope = viewModelScope,
@@ -125,7 +143,6 @@ class HabitViewModel @Inject constructor(
         viewModelScope.launch {
             val success = logCompletionUseCase.executeLog(habitId, state, date)
             if (success) {
-                // In-app logging cancels any active notification and pending snooze
                 NotificationHelper.cancelNotification(context, habitId)
                 ReminderScheduler.cancelAlarm(context, habitId)
             }
@@ -141,8 +158,7 @@ class HabitViewModel @Inject constructor(
     fun saveHabit(habit: Habit) {
         viewModelScope.launch {
             habitRepository.saveHabit(habit)
-            // Reconcile reminders on habit edit/save
-            ReminderScheduler.reconcile(context, habitRepository, completionRepository, clock)
+            ReminderScheduler.reconcile(context, habitRepository, completionRepository, settingsRepository, clock)
         }
     }
 
@@ -151,6 +167,12 @@ class HabitViewModel @Inject constructor(
             habitRepository.archiveHabit(id)
             NotificationHelper.cancelNotification(context, id)
             ReminderScheduler.cancelAlarm(context, id)
+        }
+    }
+
+    fun reconcileNow() {
+        viewModelScope.launch {
+            ReminderScheduler.reconcile(context, habitRepository, completionRepository, settingsRepository, clock)
         }
     }
 

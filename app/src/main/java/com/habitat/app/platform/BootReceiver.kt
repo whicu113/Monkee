@@ -6,6 +6,7 @@ import android.content.Intent
 import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
+import com.habitat.app.domain.repository.SettingsRepository
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -23,6 +24,9 @@ class BootReceiver : BroadcastReceiver() {
     lateinit var completionRepository: CompletionRepository
 
     @Inject
+    lateinit var settingsRepository: SettingsRepository
+
+    @Inject
     lateinit var clock: AppClock
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -37,6 +41,7 @@ class BootReceiver : BroadcastReceiver() {
                 context = context,
                 habitRepository = habitRepository,
                 completionRepository = completionRepository,
+                settingsRepository = settingsRepository,
                 clock = clock
             )
         }

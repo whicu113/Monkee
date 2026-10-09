@@ -154,7 +154,7 @@ fun HabitListScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "🛠️ Debug Date: ${uiState.currentLogicalDate}",
+                                text = "🛠️ Date: ${uiState.currentLogicalDate}",
                                 style = MaterialTheme.typography.bodySmall
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -166,6 +166,9 @@ fun HabitListScreen(
                                 }
                                 Button(onClick = { viewModel.resetDebugTime() }) {
                                     Text("Reset", fontSize = 10.sp)
+                                }
+                                Button(onClick = { viewModel.reconcileNow() }) {
+                                    Text("Reconcile", fontSize = 10.sp)
                                 }
                             }
                         }
@@ -201,6 +204,7 @@ fun HabitListScreen(
                     items(uiState.habitItems, key = { it.habit.id }) { item ->
                         HabitCard(
                             itemState = item,
+                            quietHoursEnabled = uiState.quietHoursEnabled,
                             onCheckOff = { state ->
                                 if (item.selectedDateCompletion?.state == state) {
                                     viewModel.removeCompletion(item.habit.id, uiState.selectedDate)
@@ -239,15 +243,8 @@ fun HabitListScreen(
                     TextButton(
                         onClick = {
                             showPermissionRationale = false
-                            // Open App Notification Settings (or Application Details as fallback)
-                            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                }
-                            } else {
-                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                    data = Uri.fromParts("package", context.packageName, null)
-                                }
+                            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
                             }
                             try {
                                 context.startActivity(intent)
@@ -292,6 +289,7 @@ fun HabitListScreen(
 @Composable
 fun HabitCard(
     itemState: HabitItemUiState,
+    quietHoursEnabled: Boolean,
     onCheckOff: (CompletionState) -> Unit,
     onEdit: () -> Unit,
     onArchive: () -> Unit
@@ -354,6 +352,15 @@ fun HabitCard(
                 IconButton(onClick = onArchive) {
                     Icon(Icons.Default.Archive, contentDescription = "Archive Habit")
                 }
+            }
+
+            if (BuildConfig.DEBUG && !isUnknown) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "⏰ Reminder: ${habit.reminderTime ?: "None"} | Armed: ${itemState.isArmed} | Quiet: ${if (quietHoursEnabled) "ON" else "OFF"}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
             }
 
             if (!isUnknown) {
