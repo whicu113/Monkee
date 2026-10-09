@@ -6,12 +6,12 @@ plugins {
 }
 
 android {
-    namespace = "com.example.monkee"
-    compileSdk = 35
+    namespace = "com.habitat.app"
 
     defaultConfig {
-        applicationId = "com.example.monkee"
+        applicationId = "com.habitat.app"
         minSdk = 26
+        compileSdk = 35
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
