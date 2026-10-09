@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -118,10 +119,17 @@ fun HabitListScreen(
                 .padding(innerPadding)
         ) {
             // Backfill Date Selection Strip
+            val dateStripScrollState = rememberScrollState()
+            LaunchedEffect(uiState.availableDates) {
+                if (uiState.availableDates.isNotEmpty()) {
+                    dateStripScrollState.scrollTo(dateStripScrollState.maxValue)
+                }
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
+                    .horizontalScroll(dateStripScrollState)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -205,6 +213,8 @@ fun HabitListScreen(
                         HabitCard(
                             itemState = item,
                             quietHoursEnabled = uiState.quietHoursEnabled,
+                            selectedDate = uiState.selectedDate,
+                            currentLogicalDate = uiState.currentLogicalDate,
                             onCheckOff = { state ->
                                 if (item.selectedDateCompletion?.state == state) {
                                     viewModel.removeCompletion(item.habit.id, uiState.selectedDate)
@@ -290,6 +300,8 @@ fun HabitListScreen(
 fun HabitCard(
     itemState: HabitItemUiState,
     quietHoursEnabled: Boolean,
+    selectedDate: java.time.LocalDate,
+    currentLogicalDate: java.time.LocalDate,
     onCheckOff: (CompletionState) -> Unit,
     onEdit: () -> Unit,
     onArchive: () -> Unit
@@ -307,6 +319,16 @@ fun HabitCard(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
+            if (selectedDate != currentLogicalDate) {
+                val dateFormatter = DateTimeFormatter.ofPattern("EEE, MMM d")
+                Text(
+                    text = "Logging for: ${selectedDate.format(dateFormatter)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
