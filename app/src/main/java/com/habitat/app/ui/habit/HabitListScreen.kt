@@ -219,6 +219,7 @@ fun HabitListScreen(
                 }
             } else {
                 LazyColumn(
+                    contentPadding = PaddingValues(bottom = 88.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .fillMaxSize()
