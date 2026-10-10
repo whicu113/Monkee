@@ -9,7 +9,7 @@ import java.time.LocalTime
  * SPEC Section 8.1 & 8.6.
  */
 data class AppSettings(
-    val dayBoundaryHour: Int = 4,
+    val dayBoundaryHour: Int = GameConfig.DEFAULT_DAY_BOUNDARY_HOUR,
     val quietHoursEnabled: Boolean = true,
     val quietHoursStart: LocalTime = LocalTime.of(22, 0),
     val quietHoursEnd: LocalTime = LocalTime.of(7, 0),

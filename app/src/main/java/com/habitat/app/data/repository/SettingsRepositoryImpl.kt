@@ -40,15 +40,16 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override fun getSettings(): Flow<AppSettings> {
         return context.dataStore.data.map { prefs ->
+            val defaults = AppSettings()
             AppSettings(
-                dayBoundaryHour = prefs[Keys.DAY_BOUNDARY] ?: 4,
-                quietHoursEnabled = prefs[Keys.QUIET_ENABLED] ?: true,
-                quietHoursStart = prefs[Keys.QUIET_START]?.let { LocalTime.parse(it) } ?: LocalTime.of(22, 0),
-                quietHoursEnd = prefs[Keys.QUIET_END]?.let { LocalTime.parse(it) } ?: LocalTime.of(7, 0),
-                snoozeLengthMinutes = prefs[Keys.SNOOZE_LENGTH] ?: 30,
-                strictStreaks = prefs[Keys.STRICT_STREAKS] ?: false,
-                autoUseRestTokens = prefs[Keys.AUTO_REST_TOKENS] ?: true,
-                startOfWeekDay = prefs[Keys.START_OF_WEEK]?.let { DayOfWeek.valueOf(it) } ?: DayOfWeek.MONDAY
+                dayBoundaryHour = prefs[Keys.DAY_BOUNDARY] ?: defaults.dayBoundaryHour,
+                quietHoursEnabled = prefs[Keys.QUIET_ENABLED] ?: defaults.quietHoursEnabled,
+                quietHoursStart = prefs[Keys.QUIET_START]?.let { LocalTime.parse(it) } ?: defaults.quietHoursStart,
+                quietHoursEnd = prefs[Keys.QUIET_END]?.let { LocalTime.parse(it) } ?: defaults.quietHoursEnd,
+                snoozeLengthMinutes = prefs[Keys.SNOOZE_LENGTH] ?: defaults.snoozeLengthMinutes,
+                strictStreaks = prefs[Keys.STRICT_STREAKS] ?: defaults.strictStreaks,
+                autoUseRestTokens = prefs[Keys.AUTO_REST_TOKENS] ?: defaults.autoUseRestTokens,
+                startOfWeekDay = prefs[Keys.START_OF_WEEK]?.let { DayOfWeek.valueOf(it) } ?: defaults.startOfWeekDay
             )
         }
     }
