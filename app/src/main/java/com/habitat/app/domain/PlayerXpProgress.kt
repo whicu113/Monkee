@@ -8,10 +8,29 @@ data class PlayerXpProgress(
     val fraction: Float
 )
 
-/** Pure progress helper API. This initial skeleton intentionally returns the level-one baseline. */
-fun playerXpProgress(xpTotal: Long): PlayerXpProgress = PlayerXpProgress(
-    level = 1L,
-    xpIntoLevel = 0L,
-    xpRequiredForNextLevel = xpToNext(1L),
-    fraction = 0f
-)
+/** Derives progress within the current level from the append-only ledger XP total. */
+fun playerXpProgress(xpTotal: Long): PlayerXpProgress {
+    val currentLevel = level(xpTotal)
+    val xpAtLevelStart = xpRequiredBeforeLevel(currentLevel)
+    val xpIntoLevel = xpTotal - xpAtLevelStart
+    val xpRequired = xpToNext(currentLevel)
+
+    return PlayerXpProgress(
+        level = currentLevel,
+        xpIntoLevel = xpIntoLevel,
+        xpRequiredForNextLevel = xpRequired,
+        fraction = xpIntoLevel.toFloat() / xpRequired.toFloat()
+    )
+}
+
+private fun xpRequiredBeforeLevel(level: Long): Long {
+    val completedLevels = level - 1L
+    if (completedLevels == 0L) return 0L
+
+    val otherFactor = 175L + 25L * completedLevels
+    return if (completedLevels % 2L == 0L) {
+        (completedLevels / 2L) * otherFactor
+    } else {
+        completedLevels * (otherFactor / 2L)
+    }
+}
