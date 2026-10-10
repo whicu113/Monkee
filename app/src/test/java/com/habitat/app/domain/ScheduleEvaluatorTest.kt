@@ -261,6 +261,8 @@ class ScheduleEvaluatorTest {
         )
         val rows = listOf(
             Row("full week", 3, LocalDate.of(2025, 5, 12), LocalDate.of(2025, 5, 12), 3),
+            Row("created on week start gets seven dates", 7, LocalDate.of(2025, 5, 12), LocalDate.of(2025, 5, 12), 7),
+            Row("created on last week day gets one date", 7, LocalDate.of(2025, 5, 12), LocalDate.of(2025, 5, 18), 1),
             Row("partial week caps to remaining days", 6, LocalDate.of(2025, 5, 12), LocalDate.of(2025, 5, 15), 4),
             Row("partial week retains smaller n", 2, LocalDate.of(2025, 5, 12), LocalDate.of(2025, 5, 15), 2),
             Row("later week uses configured n", 6, LocalDate.of(2025, 5, 19), LocalDate.of(2025, 5, 15), 6)
