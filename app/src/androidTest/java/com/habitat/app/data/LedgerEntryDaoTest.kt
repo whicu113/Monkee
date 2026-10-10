@@ -128,6 +128,21 @@ class LedgerEntryDaoTest {
     }
 
     @Test
+    fun differentReasonIsExcludedByEveryRewardFilter() = runBlocking {
+        dao.insert(entry(reason = "PURCHASE", delta = 35, key = "purchase-not-reward"))
+
+        assertEquals("daily Seeds filter excludes a different reason", 0L, dao.sumPositiveHabitSeeds(DAY, rewardReason))
+        assertNull("highest stage filter excludes a different reason", dao.highestStageForHabitDate(HABIT, DAY, rewardReason))
+        assertEquals("saved basis filter excludes a different reason", emptyList<LedgerEntryEntity>(), dao.stageRowsForSavedBasis(HABIT, DAY, rewardReason))
+        assertNull("pity filter excludes a different reason", dao.latestFirstDoneRowForPity(rewardReason))
+        assertEquals(
+            "weekly quota filter excludes a different reason",
+            emptyList<LocalDate>(),
+            dao.distinctPaidDatesForHabitInRangeExcludingDate(HABIT, DAY, DAY.plusDays(6), DAY.minusDays(1), rewardReason)
+        )
+    }
+
+    @Test
     fun balancesSumAllDeltasByCurrencyAndXpTotal() = runBlocking {
         dao.insert(entry(delta = 12, key = "seeds-earned"))
         dao.insert(entry(delta = -5, reason = "SPEND", key = "seeds-spent"))
