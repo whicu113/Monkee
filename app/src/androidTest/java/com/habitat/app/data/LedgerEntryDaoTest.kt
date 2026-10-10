@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -75,10 +76,18 @@ class LedgerEntryDaoTest {
     fun pityUsesLatestFirstDoneRowByIdIncludingZeroDelta() = runBlocking {
         dao.insert(entry(delta = 5, stage = "DONE", date = DAY.plusDays(5), createdAt = 900, pity = 8, key = "first"))
         val latestId = dao.insert(entry(delta = 0, stage = "DONE", date = DAY, createdAt = 100, pity = 0, key = "latest-id"))
+        val laterMinimumSeedsId = dao.insert(
+            entry(delta = 0, stage = "MINIMUM", date = DAY.plusDays(2), createdAt = 50, pity = 30, key = "later-minimum-seeds")
+        )
+        val laterXpId = dao.insert(
+            entry(currency = "XP", delta = 0, stage = "DONE", date = DAY.plusDays(3), createdAt = 25, pity = 44, key = "later-xp")
+        )
 
         val row = dao.latestFirstDoneRowForPity()
         assertNotNull("latest first-DONE row exists", row)
         assertEquals("pity ordering uses auto id rather than date or timestamp", latestId, row!!.id)
+        assertNotEquals("later MINIMUM Seeds row must be ignored", laterMinimumSeedsId, row.id)
+        assertNotEquals("later XP row must be ignored", laterXpId, row.id)
         assertEquals("zero-delta first-DONE row still resets pity", 0, row.pityCounterAfter)
         assertEquals("zero-delta row is retained", 0L, row.delta)
     }
