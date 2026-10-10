@@ -181,6 +181,9 @@ fun HabitListScreen(
                             OutlinedButton(onClick = { viewModel.reconcileNow() }) {
                                 Text("Reconcile", fontSize = 10.sp)
                             }
+                            OutlinedButton(onClick = { viewModel.refreshWidget() }) {
+                                Text("Refresh widget", fontSize = 10.sp)
+                            }
                             OutlinedButton(onClick = { viewModel.fireRemindersNow(forcePost = false) }) {
                                 Text("Check reminders (dry run)", fontSize = 10.sp)
                             }

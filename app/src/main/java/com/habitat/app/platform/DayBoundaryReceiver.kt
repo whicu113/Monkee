@@ -3,7 +3,10 @@ package com.habitat.app.platform
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.habitat.app.domain.AppClock
+import com.habitat.app.domain.WidgetUpdater
+import com.habitat.app.domain.updateSafely
 import com.habitat.app.domain.repository.SettingsRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +30,9 @@ class DayBoundaryReceiver : BroadcastReceiver() {
     @Inject
     lateinit var clock: AppClock
 
+    @Inject
+    lateinit var widgetUpdater: WidgetUpdater
+
     override fun onReceive(context: Context, intent: Intent) {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
@@ -39,10 +45,17 @@ class DayBoundaryReceiver : BroadcastReceiver() {
     }
 
     suspend fun executeBoundaryTransition(context: Context) {
-        DayBoundaryScheduler.scheduleNext(context, settingsRepository, clock)
+        try {
+            DayBoundaryScheduler.scheduleNext(context, settingsRepository, clock)
+        } finally {
+            widgetUpdater.updateSafely { exception ->
+                Log.e(TAG, "Widget refresh failed at day boundary", exception)
+            }
+        }
     }
 
     companion object {
         const val ACTION_DAY_BOUNDARY = "com.habitat.app.action.DAY_BOUNDARY"
+        private const val TAG = "DayBoundaryReceiver"
     }
 }

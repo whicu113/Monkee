@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.SystemAppClock
+import com.habitat.app.domain.WidgetUpdater
+import com.habitat.app.domain.updateSafely
 import com.habitat.app.domain.logic.FireDecision
 import com.habitat.app.domain.logic.ReminderEngine
 import com.habitat.app.domain.logic.ReplayEngine
@@ -63,7 +65,8 @@ class HabitViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val logCompletionUseCase: LogCompletionUseCase,
     private val reminderFulfillmentHandler: ReminderFulfillmentHandler,
-    private val clock: AppClock
+    private val clock: AppClock,
+    private val widgetUpdater: WidgetUpdater
 ) : ViewModel() {
 
     private val selectedDateFlow = MutableStateFlow<LocalDate?>(null)
@@ -164,22 +167,42 @@ class HabitViewModel @Inject constructor(
 
     fun saveHabit(habit: Habit) {
         viewModelScope.launch {
-            habitRepository.saveHabit(habit)
-            ReminderScheduler.reconcile(context, habitRepository, completionRepository, settingsRepository, clock)
+            try {
+                habitRepository.saveHabit(habit)
+                ReminderScheduler.reconcile(context, habitRepository, completionRepository, settingsRepository, clock)
+            } finally {
+                widgetUpdater.updateSafely { exception ->
+                    Log.e("HabitViewModel", "Widget refresh failed after saving habit '${habit.name}'", exception)
+                }
+            }
         }
     }
 
     fun archiveHabit(id: String) {
         viewModelScope.launch {
-            habitRepository.archiveHabit(id)
-            NotificationHelper.cancelNotification(context, id)
-            ReminderScheduler.cancelAlarm(context, id)
+            try {
+                habitRepository.archiveHabit(id)
+                NotificationHelper.cancelNotification(context, id)
+                ReminderScheduler.cancelAlarm(context, id)
+            } finally {
+                widgetUpdater.updateSafely { exception ->
+                    Log.e("HabitViewModel", "Widget refresh failed after archiving habit '$id'", exception)
+                }
+            }
         }
     }
 
     fun reconcileNow() {
         viewModelScope.launch {
             ReminderScheduler.reconcile(context, habitRepository, completionRepository, settingsRepository, clock)
+        }
+    }
+
+    fun refreshWidget() {
+        viewModelScope.launch {
+            widgetUpdater.updateSafely { exception ->
+                Log.e("HabitViewModel", "Debug widget refresh failed", exception)
+            }
         }
     }
 

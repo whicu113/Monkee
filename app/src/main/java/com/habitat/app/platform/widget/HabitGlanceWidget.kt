@@ -41,6 +41,7 @@ import com.habitat.app.MainActivity
 import com.habitat.app.R
 import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.logic.WidgetCompletionDecision
+import com.habitat.app.domain.logic.executeWidgetCompletionAction
 import com.habitat.app.domain.logic.WidgetDisplayState
 import com.habitat.app.domain.logic.WidgetHabitRow
 import com.habitat.app.domain.logic.WidgetProgressRingMapper
@@ -449,48 +450,43 @@ class WidgetCompletionActionCallback : ActionCallback {
             runCatching { CompletionState.valueOf(it) }.getOrNull()
         }?.takeIf { it == CompletionState.DONE || it == CompletionState.MINIMUM }
 
-        try {
-            if (habitId == null || renderedDate == null || completionState == null) {
-                Log.e(TAG, "Widget action row '${habitId ?: "unknown"}' has invalid parameters")
-                return
-            }
-            val entryPoint = EntryPointAccessors.fromApplication(
-                context.applicationContext,
-                HabitWidgetEntryPoint::class.java
-            )
-            val settings = entryPoint.settingsRepository().getSettings().first()
-            val currentDate = entryPoint.appClock().logicalDate(settings.dayBoundaryHour)
-            val habit = entryPoint.habitRepository().getHabitById(habitId)
-            val existing = entryPoint.completionRepository().getCompletion(habitId, renderedDate)
-            val habitCompletions = entryPoint.completionRepository()
-                .getCompletionsForHabit(habitId)
-                .first()
-            val decision = widgetCompletionDecision(
-                renderedDate = renderedDate,
-                currentLogicalDate = currentDate,
-                alreadyLogged = existing != null,
-                habitExists = habit != null,
-                habitArchived = habit?.archived == true,
-                schedule = habit?.schedule,
-                startOfWeekDay = settings.startOfWeekDay,
-                habitCompletions = habitCompletions
-            )
-            if (decision == WidgetCompletionDecision.LOG_AND_REFRESH) {
-                entryPoint.logCompletionUseCase().executeLog(habitId, completionState, renderedDate)
-            }
-        } catch (exception: CancellationException) {
-            throw exception
-        } catch (exception: Exception) {
-            Log.e(TAG, "Widget action failed for row '${habitId ?: "unknown"}'", exception)
-        } finally {
-            try {
-                // Commit 8 can replace this single refresh seam with WidgetUpdater.
-                HabitGlanceWidget().update(context, glanceId)
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                Log.e(TAG, "Widget refresh failed for row '${habitId ?: "unknown"}'", exception)
-            }
+        if (habitId == null || renderedDate == null || completionState == null) {
+            Log.e(TAG, "Widget action row '${habitId ?: "unknown"}' has invalid parameters")
+            return
         }
+        val entryPoint = EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            HabitWidgetEntryPoint::class.java
+        )
+        executeWidgetCompletionAction(
+            rowName = habitId,
+            habitId = habitId,
+            state = completionState,
+            renderedDate = renderedDate,
+            resolveDecision = {
+                val settings = entryPoint.settingsRepository().getSettings().first()
+                val currentDate = entryPoint.appClock().logicalDate(settings.dayBoundaryHour)
+                val habit = entryPoint.habitRepository().getHabitById(habitId)
+                val existing = entryPoint.completionRepository().getCompletion(habitId, renderedDate)
+                val habitCompletions = entryPoint.completionRepository()
+                    .getCompletionsForHabit(habitId)
+                    .first()
+                widgetCompletionDecision(
+                    renderedDate = renderedDate,
+                    currentLogicalDate = currentDate,
+                    alreadyLogged = existing != null,
+                    habitExists = habit != null,
+                    habitArchived = habit?.archived == true,
+                    schedule = habit?.schedule,
+                    startOfWeekDay = settings.startOfWeekDay,
+                    habitCompletions = habitCompletions
+                )
+            },
+            completionLogger = entryPoint.logCompletionUseCase(),
+            widgetUpdater = entryPoint.widgetUpdater(),
+            onFailure = { rowName, exception ->
+                Log.e(TAG, "Widget action failed for row '$rowName'", exception)
+            }
+        )
     }
 }

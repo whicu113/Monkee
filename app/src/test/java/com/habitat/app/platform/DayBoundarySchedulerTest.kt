@@ -5,6 +5,7 @@ import android.content.Intent
 import com.habitat.app.data.FakeCompletionDao
 import com.habitat.app.data.repository.CompletionRepositoryImpl
 import com.habitat.app.domain.AppClock
+import com.habitat.app.domain.WidgetUpdater
 import com.habitat.app.domain.model.AppSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -73,9 +74,14 @@ class DayBoundarySchedulerTest {
             override fun zoneId(): ZoneId = zoneBerlin
         }
 
+        var widgetRefreshAttempts = 0
         val receiver = DayBoundaryReceiver().apply {
             this.settingsRepository = fakeSettingsRepo
             this.clock = fireClock
+            this.widgetUpdater = WidgetUpdater {
+                widgetRefreshAttempts++
+                throw IllegalStateException("row 'day boundary' widget update failed")
+            }
         }
 
         receiver.executeBoundaryTransition(DummyContext())
@@ -83,6 +89,7 @@ class DayBoundarySchedulerTest {
         // Re-armed for tomorrow at 04:00 (May 13)
         val expectedTomorrow = ZonedDateTime.parse("2025-05-13T04:00:00+02:00").toInstant()
         assertEquals(expectedTomorrow.toEpochMilli(), fakeAlarmGateway.scheduledDayBoundaryMillis)
+        assertEquals("row 'day boundary' updater attempted", 1, widgetRefreshAttempts)
     }
 
     @Test
@@ -108,11 +115,16 @@ class DayBoundarySchedulerTest {
         val habitRepo = FakeHabitRepository()
         val completionRepo = CompletionRepositoryImpl(FakeCompletionDao())
 
+        var widgetRefreshAttempts = 0
         val bootReceiver = BootReceiver().apply {
             this.habitRepository = habitRepo
             this.completionRepository = completionRepo
             this.settingsRepository = fakeSettingsRepo
             this.clock = this@DayBoundarySchedulerTest.clock
+            this.widgetUpdater = WidgetUpdater {
+                widgetRefreshAttempts++
+                throw IllegalStateException("row 'boot receiver' widget update failed")
+            }
         }
 
         // Reconcile on boot
@@ -121,6 +133,7 @@ class DayBoundarySchedulerTest {
         assertTrue(fakeAlarmGateway.isDayBoundaryAlarmScheduled(DummyContext()))
         val expectedMillis = ZonedDateTime.parse("2025-05-12T04:00:00+02:00").toInstant().toEpochMilli()
         assertEquals(expectedMillis, fakeAlarmGateway.scheduledDayBoundaryMillis)
+        assertEquals("row 'boot receiver' updater attempted", 1, widgetRefreshAttempts)
     }
 
     @Test
@@ -143,6 +156,7 @@ class DayBoundarySchedulerTest {
             this.completionRepository = completionRepo
             this.settingsRepository = fakeSettingsRepo
             this.clock = nyClock
+            this.widgetUpdater = WidgetUpdater { }
         }
 
         bootReceiver.handleAction(DummyContext(), Intent.ACTION_TIMEZONE_CHANGED)
@@ -183,6 +197,7 @@ class DayBoundarySchedulerTest {
             this.completionRepository = completionRepo
             this.settingsRepository = fakeSettingsRepo
             this.clock = this@DayBoundarySchedulerTest.clock
+            this.widgetUpdater = WidgetUpdater { }
         }
 
         bootReceiver.handleAction(DummyContext(), "android.intent.action.AIRPLANE_MODE")

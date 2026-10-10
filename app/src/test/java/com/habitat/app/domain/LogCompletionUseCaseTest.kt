@@ -3,6 +3,7 @@ package com.habitat.app.domain
 import app.cash.turbine.test
 import com.habitat.app.data.FakeCompletionDao
 import com.habitat.app.data.repository.CompletionRepositoryImpl
+import com.habitat.app.domain.WidgetUpdater
 import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.usecase.CompletionReminderHandler
 import com.habitat.app.domain.usecase.LogCompletionUseCase
@@ -100,6 +101,21 @@ class LogCompletionUseCaseTest {
             assertEquals(0, list.size)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `executeRemove completes when widget updater throws for the row`() = runTest {
+        useCase = LogCompletionUseCase(
+            repository,
+            clock,
+            fakeHandler,
+            WidgetUpdater { throw IllegalStateException("widget provider unavailable") }
+        )
+        useCase.executeLog("h1", CompletionState.DONE, fixedToday)
+
+        useCase.executeRemove("h1", fixedToday)
+
+        assertEquals("row 'h1' completion was removed", null, repository.getCompletion("h1", fixedToday))
     }
 }
 

@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.habitat.app.domain.AppClock
+import com.habitat.app.domain.WidgetUpdater
+import com.habitat.app.domain.updateSafely
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
 import com.habitat.app.domain.repository.SettingsRepository
@@ -33,6 +35,9 @@ class BootReceiver : BroadcastReceiver() {
 
     @Inject
     lateinit var clock: AppClock
+
+    @Inject
+    lateinit var widgetUpdater: WidgetUpdater
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
@@ -65,24 +70,30 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     suspend fun reconcileAll(context: Context) {
-        reconcileAll(
-            reminderReconcile = {
-                ReminderScheduler.reconcile(
-                    context = context,
-                    habitRepository = habitRepository,
-                    completionRepository = completionRepository,
-                    settingsRepository = settingsRepository,
-                    clock = clock
-                )
-            },
-            dayBoundaryRearm = {
-                DayBoundaryScheduler.scheduleNext(
-                    context = context,
-                    settingsRepository = settingsRepository,
-                    clock = clock
-                )
+        try {
+            reconcileAll(
+                reminderReconcile = {
+                    ReminderScheduler.reconcile(
+                        context = context,
+                        habitRepository = habitRepository,
+                        completionRepository = completionRepository,
+                        settingsRepository = settingsRepository,
+                        clock = clock
+                    )
+                },
+                dayBoundaryRearm = {
+                    DayBoundaryScheduler.scheduleNext(
+                        context = context,
+                        settingsRepository = settingsRepository,
+                        clock = clock
+                    )
+                }
+            )
+        } finally {
+            widgetUpdater.updateSafely { exception ->
+                Log.e(TAG, "Widget refresh failed after reconciliation", exception)
             }
-        )
+        }
     }
 
     internal suspend fun reconcileAll(

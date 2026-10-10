@@ -3,9 +3,13 @@ package com.habitat.app.platform
 import com.habitat.app.data.FakeCompletionDao
 import com.habitat.app.data.repository.CompletionRepositoryImpl
 import com.habitat.app.domain.AppClock
+import com.habitat.app.domain.WidgetUpdater
+import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.model.ScheduleType
+import com.habitat.app.domain.usecase.LogCompletionUseCase
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -41,16 +45,27 @@ class PlatformCompletionReminderHandlerTest {
         fakeGateway.scheduleAlarm(DummyContext(), "h1", "snooze_alarm", 123456L)
         assertTrue(fakeGateway.isAlarmScheduled(DummyContext(), "h1", "snooze_alarm"))
 
+        val throwingUpdater = WidgetUpdater {
+            throw IllegalStateException("widget provider unavailable")
+        }
         val handler = PlatformCompletionReminderHandler(
             context = DummyContext(),
             habitRepository = fakeHabitRepo,
             completionRepository = completionRepo,
             settingsRepository = fakeSettingsRepo,
-            clock = clock
+            clock = clock,
+            widgetUpdater = throwingUpdater
         )
 
-        handler.onCompletionLogged("h1", LocalDate.of(2025, 5, 10))
+        val logged = LogCompletionUseCase(completionRepo, clock, handler)
+            .executeLog("h1", CompletionState.DONE, LocalDate.of(2025, 5, 10))
 
+        assertTrue("row 'Test Habit' completion still logs", logged)
+        assertEquals(
+            "row 'Test Habit' completion is stored",
+            CompletionState.DONE,
+            completionRepo.getCompletion("h1", LocalDate.of(2025, 5, 10))?.state
+        )
         // Snooze alarm cancelled
         assertFalse(fakeGateway.isAlarmScheduled(DummyContext(), "h1", "snooze_alarm"))
         // Main reminder alarm reconciled and scheduled

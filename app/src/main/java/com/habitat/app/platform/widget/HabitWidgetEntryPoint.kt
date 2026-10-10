@@ -1,6 +1,7 @@
 package com.habitat.app.platform.widget
 
 import com.habitat.app.domain.AppClock
+import com.habitat.app.domain.WidgetUpdater
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
 import com.habitat.app.domain.repository.SettingsRepository
@@ -17,4 +18,5 @@ interface HabitWidgetEntryPoint {
     fun settingsRepository(): SettingsRepository
     fun appClock(): AppClock
     fun logCompletionUseCase(): LogCompletionUseCase
+    fun widgetUpdater(): WidgetUpdater
 }
