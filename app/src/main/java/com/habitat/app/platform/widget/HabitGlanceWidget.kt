@@ -48,9 +48,12 @@ import com.habitat.app.domain.logic.executeWidgetCompletionAction
 import com.habitat.app.domain.logic.WidgetDisplayState
 import com.habitat.app.domain.logic.WidgetHabitRow
 import com.habitat.app.domain.logic.WidgetProgressRingMapper
+import com.habitat.app.domain.logic.WidgetLayout
+import com.habitat.app.domain.logic.WidgetLayoutSelector
 import com.habitat.app.domain.logic.WidgetRowActionState
 import com.habitat.app.domain.logic.WidgetStateFlow
 import com.habitat.app.domain.logic.WidgetRenderState
+import com.habitat.app.domain.logic.WidgetSizeDp
 import com.habitat.app.domain.logic.widgetCompletionDecision
 import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.logic.rowActions
@@ -67,7 +70,10 @@ import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 private val SMALL_WIDGET_SIZE = DpSize(130.dp, 160.dp)
-private val MEDIUM_WIDGET_SIZE = DpSize(250.dp, 380.dp)
+private val MEDIUM_WIDGET_SIZE = DpSize(
+    WidgetLayoutSelector.STANDARD_WIDTH_DP.dp,
+    WidgetLayoutSelector.STANDARD_HEIGHT_DP.dp
+)
 private const val TAG = "HabitGlanceWidget"
 private val HabitIdParameter = ActionParameters.Key<String>("habitId")
 private val CompletionStateParameter = ActionParameters.Key<String>("completionState")
@@ -141,63 +147,32 @@ private sealed interface WidgetDataState {
 @androidx.compose.runtime.Composable
 private fun WidgetContent(state: WidgetDisplayState, renderedDate: LocalDate) {
     val size = LocalSize.current
-    val smallest = size.width < MEDIUM_WIDGET_SIZE.width || size.height < MEDIUM_WIDGET_SIZE.height
+    val layout = WidgetLayoutSelector.choose(WidgetSizeDp(size.width.value, size.height.value))
+    if (BuildConfig.DEBUG) {
+        Log.d(TAG, "LocalSize=${size.width.value}x${size.height.value}dp chosenLayout=$layout")
+    }
+    val compact = layout == WidgetLayout.COMPACT_LIST
     val cardModifier = GlanceModifier
         .fillMaxSize()
         .background(ColorProvider(R.color.widget_surface))
-        .padding(12.dp)
+        .padding(if (compact) 4.dp else 12.dp)
 
-    if (smallest) {
-        SmallWidgetRing(state)
-    } else {
-        when (state) {
-            WidgetDisplayState.NoHabits -> WidgetFallback(
-                title = "Start with one small habit",
-                detail = "Tap to open Habitat and add a habit.",
-                modifier = cardModifier
-            )
+    when (state) {
+        WidgetDisplayState.NoHabits -> WidgetFallback(
+            title = "Start with one small habit",
+            detail = "Tap to open Habitat and add a habit.",
+            modifier = cardModifier
+        )
 
-            WidgetDisplayState.NothingDueToday -> WidgetStatusCard(
-                title = "Nothing due today",
-                detail = "Your habits are on their own schedule.",
-                modifier = cardModifier
-            )
+        WidgetDisplayState.NothingDueToday -> WidgetStatusCard(
+            title = "Nothing due today",
+            detail = "Your habits are on their own schedule.",
+            modifier = cardModifier
+        )
 
-            is WidgetDisplayState.AllSkipped -> AllSkippedCard(state, cardModifier, renderedDate)
+        is WidgetDisplayState.AllSkipped -> AllSkippedCard(state, compact, cardModifier, renderedDate)
 
-            is WidgetDisplayState.Habits -> HabitsCard(state, cardModifier, renderedDate)
-        }
-    }
-}
-
-@androidx.glance.GlanceComposable
-@androidx.compose.runtime.Composable
-private fun SmallWidgetRing(state: WidgetDisplayState) {
-    val description = when (state) {
-        WidgetDisplayState.NoHabits -> "No habits yet. Tap to open Habitat."
-        WidgetDisplayState.NothingDueToday -> "Nothing due today. Tap to open Habitat."
-        is WidgetDisplayState.AllSkipped -> "All habits skipped today. Tap to open Habitat."
-        is WidgetDisplayState.Habits ->
-            "Today's progress: ${state.completedCount} of ${state.totalDueCount} done. Tap to open Habitat."
-    }
-    Column(
-        modifier = GlanceModifier
-            .fillMaxSize()
-            .background(ColorProvider(R.color.widget_surface))
-            .clickable(actionStartActivity<MainActivity>())
-            .semantics { contentDescription = description },
-        verticalAlignment = Alignment.Vertical.CenterVertically,
-        horizontalAlignment = Alignment.Horizontal.CenterHorizontally
-    ) {
-        if (state is WidgetDisplayState.Habits) {
-            ProgressRing(
-                index = requireNotNull(WidgetProgressRingMapper.ringIndex(state)),
-                description = description,
-                size = 56
-            )
-        } else {
-            NeutralRing(description, 56)
-        }
+        is WidgetDisplayState.Habits -> HabitsCard(state, compact, cardModifier, renderedDate)
     }
 }
 
@@ -205,6 +180,7 @@ private fun SmallWidgetRing(state: WidgetDisplayState) {
 @androidx.compose.runtime.Composable
 private fun HabitsCard(
     state: WidgetDisplayState.Habits,
+    compact: Boolean,
     modifier: GlanceModifier,
     renderedDate: LocalDate
 ) {
@@ -215,7 +191,7 @@ private fun HabitsCard(
         modifier = modifier.semantics { contentDescription = ringDescription },
         verticalAlignment = Alignment.Vertical.Top
     ) {
-        ProgressHeader(ringIndex, ringDescription, state.completedCount, state.totalDueCount)
+        ProgressHeader(ringIndex, ringDescription, state.completedCount, state.totalDueCount, compact)
         LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
             items(state.rows, itemId = { stableWidgetItemId(it.habitId) }) { row ->
                 HabitRow(row, renderedDate)
@@ -228,21 +204,26 @@ private fun HabitsCard(
 @androidx.compose.runtime.Composable
 private fun AllSkippedCard(
     state: WidgetDisplayState.AllSkipped,
+    compact: Boolean,
     modifier: GlanceModifier,
     renderedDate: LocalDate
 ) {
     Column(modifier = modifier, verticalAlignment = Alignment.Vertical.Top) {
         Row(
-            modifier = GlanceModifier.fillMaxWidth().height(60.dp),
+            modifier = GlanceModifier
+                .fillMaxWidth()
+                .height(if (compact) 44.dp else 60.dp)
+                .clickable(actionStartActivity<MainActivity>())
+                .semantics { contentDescription = "All skipped today. Open Habitat." },
             verticalAlignment = Alignment.Vertical.CenterVertically
         ) {
-            NeutralRing("All skipped today", 52)
+            NeutralRing("All skipped today", if (compact) 36 else 52)
             Column(
-                modifier = GlanceModifier.defaultWeight().padding(start = 10.dp),
+                modifier = GlanceModifier.defaultWeight().padding(start = if (compact) 6.dp else 10.dp),
                 verticalAlignment = Alignment.Vertical.CenterVertically
             ) {
-                Text("All skipped today", style = primaryStyle(16))
-                Text("You're ready when you are.", style = secondaryStyle(13))
+                Text("All skipped today", style = primaryStyle(if (compact) 12 else 16))
+                if (!compact) Text("You're ready when you are.", style = secondaryStyle(13))
             }
         }
         LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
@@ -255,18 +236,25 @@ private fun AllSkippedCard(
 
 @androidx.glance.GlanceComposable
 @androidx.compose.runtime.Composable
-private fun ProgressHeader(index: Int, description: String, completed: Int, total: Int) {
+private fun ProgressHeader(index: Int, description: String, completed: Int, total: Int, compact: Boolean) {
     Row(
-        modifier = GlanceModifier.fillMaxWidth().height(60.dp),
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .height(if (compact) 44.dp else 60.dp)
+            .clickable(actionStartActivity<MainActivity>())
+            .semantics { contentDescription = "$description. Open Habitat." },
         verticalAlignment = Alignment.Vertical.CenterVertically
     ) {
-        ProgressRing(index, description, 52)
+        ProgressRing(index, description, if (compact) 36 else 52)
         Column(
-            modifier = GlanceModifier.defaultWeight().padding(start = 10.dp),
+            modifier = GlanceModifier.defaultWeight().padding(start = if (compact) 6.dp else 10.dp),
             verticalAlignment = Alignment.Vertical.CenterVertically
         ) {
-            Text("Today's progress", style = primaryStyle(16))
-            Text("$completed of $total done", style = secondaryStyle(13))
+            if (!compact) Text("Today's progress", style = primaryStyle(16))
+            Text(
+                "$completed of $total done",
+                style = secondaryStyle(if (compact) 12 else 13)
+            )
         }
     }
 }
