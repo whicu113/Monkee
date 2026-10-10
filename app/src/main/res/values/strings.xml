@@ -8,4 +8,12 @@
     <string name="player_seeds_content_description">Seeds balance: %1$d</string>
     <string name="player_level_content_description">Level %1$d</string>
     <string name="player_xp_content_description">XP progress: %1$d of %2$d at level %3$d</string>
+    <string name="reward_xp_earned">+%1$d XP</string>
+    <string name="reward_comeback">Welcome back. Your comeback bonus is included.</string>
+    <string name="reward_daily_seeds_cap">You\'ve earned today\'s maximum Seeds.</string>
+    <string name="reward_drop_found">You found something!</string>
+    <plurals name="reward_seeds_earned">
+        <item quantity="one">+%1$d Seed</item>
+        <item quantity="other">+%1$d Seeds</item>
+    </plurals>
 </resources>

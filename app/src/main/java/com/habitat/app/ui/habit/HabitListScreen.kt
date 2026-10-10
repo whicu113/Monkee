@@ -41,6 +41,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -50,14 +54,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -66,6 +74,9 @@ import com.habitat.app.R
 import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.model.ScheduleType
+import com.habitat.app.ui.reward.RewardMessageKey
+import com.habitat.app.ui.reward.RewardMessageSpec
+import kotlinx.coroutines.flow.collectLatest
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
@@ -81,6 +92,20 @@ fun HabitListScreen(
     var editingHabit by remember { mutableStateOf<Habit?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showPermissionRationale by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel.rewardMessageEvents) {
+        viewModel.rewardMessageEvents.collectLatest { specs ->
+            val parts = specs.mapNotNull { context.rewardMessageText(it) }
+            if (parts.isNotEmpty()) {
+                snackbarHostState.currentSnackbarData?.dismiss()
+                snackbarHostState.showSnackbar(
+                    message = parts.joinToString(" · "),
+                    duration = SnackbarDuration.Long
+                )
+            }
+        }
+    }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -123,6 +148,26 @@ fun HabitListScreen(
             FloatingActionButton(onClick = { showCreateDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Create Habit")
             }
+        },
+        bottomBar = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                snackbar = { data ->
+                    Snackbar(
+                        modifier = Modifier.semantics(mergeDescendants = true) {
+                            contentDescription = data.visuals.message.replace(" · ", ", ")
+                            liveRegion = LiveRegionMode.Polite
+                        },
+                        content = {
+                            Text(
+                                text = data.visuals.message,
+                                maxLines = Int.MAX_VALUE,
+                                overflow = TextOverflow.Clip
+                            )
+                        }
+                    )
+                }
+            )
         },
         modifier = modifier
     ) { innerPadding ->
@@ -324,6 +369,40 @@ fun HabitListScreen(
                     viewModel.saveHabit(it)
                     editingHabit = null
                 }
+            )
+        }
+    }
+}
+
+private fun android.content.Context.rewardMessageText(spec: RewardMessageSpec): String? =
+    when (spec.key) {
+        RewardMessageKey.SEEDS_EARNED -> spec.arguments.getOrNull(0)
+            ?.takeIf { it > 0 }
+            ?.let { amount -> resources.getQuantityString(R.plurals.reward_seeds_earned, amount, amount) }
+        RewardMessageKey.XP_EARNED -> spec.arguments.getOrNull(0)
+            ?.takeIf { it > 0 }
+            ?.let { amount -> getString(R.string.reward_xp_earned, amount) }
+        RewardMessageKey.COMEBACK -> getString(R.string.reward_comeback)
+        RewardMessageKey.DAILY_SEEDS_CAP -> getString(R.string.reward_daily_seeds_cap)
+        RewardMessageKey.DROP_FOUND -> getString(R.string.reward_drop_found)
+    }
+
+@Preview(showBackground = true, name = "Reward feedback snackbar")
+@Composable
+private fun RewardFeedbackSnackbarPreview() {
+    val message = listOf(
+        stringResource(R.plurals.reward_seeds_earned, 11, 11),
+        stringResource(R.string.reward_xp_earned, 10),
+        stringResource(R.string.reward_comeback),
+        stringResource(R.string.reward_drop_found)
+    ).joinToString(" · ")
+
+    MaterialTheme {
+        Snackbar {
+            Text(
+                text = message,
+                maxLines = Int.MAX_VALUE,
+                overflow = TextOverflow.Clip
             )
         }
     }
