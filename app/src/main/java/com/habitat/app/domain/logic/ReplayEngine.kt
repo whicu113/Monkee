@@ -179,7 +179,11 @@ object ReplayEngine {
 
                     // Creation partial week cap
                     val effectiveDays = daysInWeek.filter { it >= startDate }
-                    val targetN = min(schedule.n, effectiveDays.size)
+                    val targetN = ScheduleEvaluator.effectiveNPerWeekTarget(
+                        schedule = schedule,
+                        habitStartDate = startDate,
+                        weekStart = weekStart
+                    )
 
                     val loggedInWeek = daysInWeek.mapNotNull { completionsByDate[it] }
                     val completedCount = loggedInWeek.count {

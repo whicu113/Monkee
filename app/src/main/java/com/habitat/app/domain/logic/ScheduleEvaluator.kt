@@ -72,6 +72,16 @@ object ScheduleEvaluator {
         return d
     }
 
+    /** Returns the N_PER_WEEK target for a week, capped by remaining dates in a creation week. */
+    fun effectiveNPerWeekTarget(
+        schedule: ScheduleType.NPerWeek,
+        habitStartDate: LocalDate,
+        weekStart: LocalDate
+    ): Int {
+        val effectiveDays = (0..6L).count { weekStart.plusDays(it) >= habitStartDate }
+        return minOf(schedule.n, effectiveDays)
+    }
+
     /**
      * Returns true if the NPerWeek weekly quota has been met for [schedule] on [date],
      * using only DONE and MINIMUM completions (SKIPPED does not count toward the quota).

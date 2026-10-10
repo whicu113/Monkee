@@ -249,4 +249,33 @@ class ScheduleEvaluatorTest {
             )
         )
     }
+
+    @Test
+    fun `effective NPerWeek target caps the habit creation week only`() {
+        data class Row(
+            val name: String,
+            val n: Int,
+            val weekStart: LocalDate,
+            val habitStartDate: LocalDate,
+            val expected: Int
+        )
+        val rows = listOf(
+            Row("full week", 3, LocalDate.of(2025, 5, 12), LocalDate.of(2025, 5, 12), 3),
+            Row("partial week caps to remaining days", 6, LocalDate.of(2025, 5, 12), LocalDate.of(2025, 5, 15), 4),
+            Row("partial week retains smaller n", 2, LocalDate.of(2025, 5, 12), LocalDate.of(2025, 5, 15), 2),
+            Row("later week uses configured n", 6, LocalDate.of(2025, 5, 19), LocalDate.of(2025, 5, 15), 6)
+        )
+
+        rows.forEach { row ->
+            assertEquals(
+                "${row.name}: effective weekly target",
+                row.expected,
+                ScheduleEvaluator.effectiveNPerWeekTarget(
+                    schedule = ScheduleType.NPerWeek(row.n),
+                    habitStartDate = row.habitStartDate,
+                    weekStart = row.weekStart
+                )
+            )
+        }
+    }
 }
