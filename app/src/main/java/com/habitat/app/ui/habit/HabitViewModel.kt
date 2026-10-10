@@ -218,7 +218,8 @@ class HabitViewModel @Inject constructor(
                     context = context,
                     habitId = habit.id,
                     intentDateStr = null,
-                    forcePost = forcePost
+                    forcePost = forcePost,
+                    dryRun = !forcePost
                 )
 
                 val summary = when (decision) {

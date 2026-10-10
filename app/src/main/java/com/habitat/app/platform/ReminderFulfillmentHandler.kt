@@ -42,7 +42,8 @@ class ReminderFulfillmentHandler @Inject constructor(
         context: Context,
         habitId: String,
         intentDateStr: String?,
-        forcePost: Boolean = false
+        forcePost: Boolean = false,
+        dryRun: Boolean = false
     ): FireDecision? {
         val habit = habitRepository.getHabitById(habitId) ?: return null
         if (habit.archived || habit.schedule is ScheduleType.Unknown) return null
@@ -58,15 +59,17 @@ class ReminderFulfillmentHandler @Inject constructor(
             }
         }
 
-        // 1. RE-ARM FIRST: Arm the next trigger BEFORE posting notification
-        val nowInstant = clock.instant().plusSeconds(60)
-        ReminderScheduler.scheduleNextForHabit(
-            context = context,
-            habit = habit,
-            fromInstant = nowInstant,
-            zoneId = clock.zoneId(),
-            appSettings = settings
-        )
+        // 1. RE-ARM FIRST: Arm the next trigger BEFORE posting notification (skipped in dry-run)
+        if (!dryRun) {
+            val nowInstant = clock.instant().plusSeconds(60)
+            ReminderScheduler.scheduleNextForHabit(
+                context = context,
+                habit = habit,
+                fromInstant = nowInstant,
+                zoneId = clock.zoneId(),
+                appSettings = settings
+            )
+        }
 
         // 2. Compute isWeeklyQuotaMet and completions for habit
         val completions = completionRepository.getCompletionsForHabit(habitId).first()
@@ -109,30 +112,32 @@ class ReminderFulfillmentHandler @Inject constructor(
             eval
         }
 
-        when (decision) {
-            is FireDecision.Post -> {
-                if (!forcePost) {
-                    settingsRepository.addPostedHabitId(today.toString(), habitId)
+        if (!dryRun) {
+            when (decision) {
+                is FireDecision.Post -> {
+                    if (!forcePost) {
+                        settingsRepository.addPostedHabitId(today.toString(), habitId)
+                    }
+                    notifier.postHabitNotification(
+                        context = context,
+                        habit = habit,
+                        logicalDate = today,
+                        snoozeMinutes = settings.snoozeLengthMinutes
+                    )
                 }
-                notifier.postHabitNotification(
-                    context = context,
-                    habit = habit,
-                    logicalDate = today,
-                    snoozeMinutes = settings.snoozeLengthMinutes
-                )
-            }
-            is FireDecision.Summary -> {
-                settingsRepository.addPostedHabitId(today.toString(), habitId)
-                val habits = habitRepository.getActiveHabits().first()
-                val overflow = habits.filter { it.id !in postedIds }
-                notifier.postSummaryNotification(
-                    context = context,
-                    overflowHabits = overflow,
-                    logicalDate = today
-                )
-            }
-            is FireDecision.Drop -> {
-                // Drop: do not post notification and do not add to postedIds
+                is FireDecision.Summary -> {
+                    settingsRepository.addPostedHabitId(today.toString(), habitId)
+                    val habits = habitRepository.getActiveHabits().first()
+                    val overflow = habits.filter { it.id !in postedIds }
+                    notifier.postSummaryNotification(
+                        context = context,
+                        overflowHabits = overflow,
+                        logicalDate = today
+                    )
+                }
+                is FireDecision.Drop -> {
+                    // Drop: do not post notification and do not add to postedIds
+                }
             }
         }
 

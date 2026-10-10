@@ -304,18 +304,100 @@ class ReminderReceiverLogicTest {
         settingsRepo.addPostedHabitId(fixedToday.toString(), "h1")
         assertEquals(setOf("h1"), settingsRepo.getPostedHabitIds(fixedToday.toString()))
 
-        // 1. Normal mode: drops duplicate
-        val decisionNormal = handler.execute(DummyContext(), "h1", null, forcePost = false)
+        // 1. Normal mode (without dryRun, like real AlarmReceiver): drops duplicate
+        val decisionNormal = handler.execute(DummyContext(), "h1", null, forcePost = false, dryRun = false)
         assertEquals(FireDecision.Drop(DropReason.Duplicate), decisionNormal)
         assertEquals(0, notifier.postedHabits.size)
         assertEquals(setOf("h1"), settingsRepo.getPostedHabitIds(fixedToday.toString()))
 
         // 2. Force post mode: bypasses duplicate, posts notification, and leaves posted-ids untouched
-        val decisionForce = handler.execute(DummyContext(), "h1", null, forcePost = true)
+        val decisionForce = handler.execute(DummyContext(), "h1", null, forcePost = true, dryRun = false)
         assertEquals(FireDecision.Post, decisionForce)
         assertEquals(1, notifier.postedHabits.size)
         assertEquals("h1", notifier.postedHabits[0].id)
         // posted-ids set is not modified by force mode
         assertEquals(setOf("h1"), settingsRepo.getPostedHabitIds(fixedToday.toString()))
+    }
+
+    @Test
+    fun `normal mode dry run evaluates decision but leaves posted-ids and alarms unchanged`() = runTest {
+        val habit = Habit(
+            id = "h1",
+            name = "Test Habit",
+            schedule = ScheduleType.Daily,
+            reminderTime = LocalTime.of(9, 0)
+        )
+        val habitRepo = FakeHabitRepository()
+        habitRepo.saveHabit(habit)
+
+        val completionRepo = CompletionRepositoryImpl(FakeCompletionDao())
+        val settingsRepo = FakeSettingsRepository()
+        val gateway = FakeAlarmGateway()
+        ReminderScheduler.alarmGateway = gateway
+        val notifier = FakeNotificationNotifier()
+
+        val handler = ReminderFulfillmentHandler(
+            habitRepository = habitRepo,
+            completionRepository = completionRepo,
+            settingsRepository = settingsRepo,
+            clock = clock,
+            notifier = notifier
+        )
+
+        // Run dry-run execution
+        val decision = handler.execute(DummyContext(), "h1", null, forcePost = false, dryRun = true)
+
+        // Decision is evaluated to Post (since eligible at 09:00 outside quiet hours and unlogged)
+        assertEquals(FireDecision.Post, decision)
+        // BUT no notification is posted
+        assertEquals(0, notifier.postedHabits.size)
+        // Posted-ids is NOT mutated
+        assertEquals(emptySet<String>(), settingsRepo.getPostedHabitIds(fixedToday.toString()))
+        // Alarms are NOT re-armed or modified
+        assertEquals(false, gateway.isAlarmScheduled(DummyContext(), "h1", "alarm"))
+    }
+
+    @Test
+    fun `NPerWeek habit drops reminder when 2 DONE completions occur in this week`() = runTest {
+        // fixedToday is Saturday 2025-05-10.
+        // Monday-start week bounds: Mon 2025-05-05 .. Sun 2025-05-11.
+        // Completions on Wed 2025-05-07 and Thu 2025-05-08 are inside this exact week.
+        val habit = Habit(
+            id = "hw2",
+            name = "Weekly Habit 2",
+            schedule = ScheduleType.NPerWeek(n = 2),
+            reminderTime = LocalTime.of(9, 0)
+        )
+        val habitRepo = FakeHabitRepository()
+        habitRepo.saveHabit(habit)
+
+        val completionRepo = CompletionRepositoryImpl(FakeCompletionDao())
+        val settingsRepo = FakeSettingsRepository()
+        val gateway = FakeAlarmGateway()
+        ReminderScheduler.alarmGateway = gateway
+        val notifier = FakeNotificationNotifier()
+
+        // 2 DONE completions within this week
+        completionRepo.logCompletion(
+            LoggedCompletion(habitId = "hw2", logicalDate = LocalDate.of(2025, 5, 7), state = CompletionState.DONE)
+        )
+        completionRepo.logCompletion(
+            LoggedCompletion(habitId = "hw2", logicalDate = LocalDate.of(2025, 5, 8), state = CompletionState.DONE)
+        )
+
+        val handler = ReminderFulfillmentHandler(
+            habitRepository = habitRepo,
+            completionRepository = completionRepo,
+            settingsRepository = settingsRepo,
+            clock = clock,
+            notifier = notifier
+        )
+
+        val decision = handler.execute(DummyContext(), "hw2", null)
+
+        // Quota is 2/2 -> Drops with WeeklyQuotaMet
+        assertEquals(FireDecision.Drop(DropReason.WeeklyQuotaMet), decision)
+        assertEquals(emptySet<String>(), settingsRepo.getPostedHabitIds(fixedToday.toString()))
+        assertEquals(0, notifier.postedHabits.size)
     }
 }
