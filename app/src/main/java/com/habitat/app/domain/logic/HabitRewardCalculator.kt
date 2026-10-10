@@ -27,7 +27,7 @@ fun rewardIdempotencyKey(
 /** Reward inputs fixed when the first stage for a habit/date was granted. */
 data class RewardBasis(val difficulty: Difficulty, val streakLength: Int, val comeback: Boolean)
 
-/** Actual ledger amounts and immutable calculation basis already saved for a reward stage. */
+/** Full stage entitlement persisted on the ledger, plus the immutable calculation basis. */
 data class RewardAmounts(val seeds: Int, val xp: Int, val basis: RewardBasis)
 
 /** Bounded random source injected so drop decisions can be deterministic in tests. */
@@ -81,11 +81,10 @@ fun calculateHabitReward(
     val priorGrant = grantedByStage[RewardStage.MINIMUM] ?: grantedByStage[RewardStage.DONE]
     val basis = priorGrant?.basis ?: RewardBasis(difficulty, streakLength, comeback)
     val currentEntitlement = entitlement(state, basis.difficulty, basis.streakLength, basis.comeback)
-    val previousEntitlement = when {
-        RewardStage.DONE in grantedByStage -> entitlement(CompletionState.DONE, basis.difficulty, basis.streakLength, basis.comeback)
-        RewardStage.MINIMUM in grantedByStage -> entitlement(CompletionState.MINIMUM, basis.difficulty, basis.streakLength, basis.comeback)
-        else -> RewardAmounts(0, 0, basis)
-    }
+    // Saved entitlement values are authoritative so later GameConfig edits cannot rewrite history.
+    val previousEntitlement = grantedByStage[RewardStage.DONE]
+        ?: grantedByStage[RewardStage.MINIMUM]
+        ?: RewardAmounts(0, 0, basis)
 
     val seedDelta = (currentEntitlement.seeds - previousEntitlement.seeds).coerceAtLeast(0)
     val xpDelta = (currentEntitlement.xp - previousEntitlement.xp).coerceAtLeast(0)
@@ -102,7 +101,7 @@ fun calculateHabitReward(
         xpGranted = xpGranted,
         drop = drop,
         pityCounterAfter = pityAfter,
-        grantedAmounts = RewardAmounts(seedsGranted, xpGranted, basis)
+        grantedAmounts = currentEntitlement
     )
 }
 

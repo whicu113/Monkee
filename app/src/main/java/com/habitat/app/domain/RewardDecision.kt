@@ -11,7 +11,8 @@ enum class RewardNoRewardReason {
     BACKFILL,
     UNKNOWN_SCHEDULE,
     WEEKLY_GOAL_REACHED,
-    ALREADY_REWARDED
+    ALREADY_REWARDED,
+    SKIPPED
 }
 
 sealed interface HabitRewardResult {
