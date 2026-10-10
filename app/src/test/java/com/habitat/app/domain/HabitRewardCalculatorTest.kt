@@ -163,6 +163,35 @@ class HabitRewardCalculatorTest {
     }
 
     @Test
+    fun `pityCounter29Then30Then31CallsRandomInOrder`() {
+        data class Row(
+            val name: String,
+            val pityCounter: Int,
+            val scriptedRolls: List<Int>,
+            val expectedDrop: DropRarity?,
+            val expectedCounterAfter: Int,
+            val expectedCallBounds: List<Int>
+        )
+        val rows = listOf(
+            Row("counter 29 chance miss", 29, listOf(99), null, 30, listOf(100)),
+            Row("counter 29 chance hit then rarity", 29, listOf(0, 69), DropRarity.COMMON, 0, listOf(100, 100)),
+            Row("counter 30 skips chance and rolls rarity", 30, listOf(99), DropRarity.LEGENDARY, 0, listOf(100)),
+            Row("counter 31 skips chance and rolls rarity", 31, listOf(70), DropRarity.UNCOMMON, 0, listOf(100))
+        )
+
+        rows.forEach { row ->
+            val random = RecordingRewardRandom(row.scriptedRolls)
+            val result = calculateHabitReward(
+                CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0,
+                random, row.pityCounter
+            )
+            assertEquals("${row.name}: drop", row.expectedDrop, result.drop)
+            assertEquals("${row.name}: pity counter", row.expectedCounterAfter, result.pityCounterAfter)
+            assertEquals("${row.name}: RNG call order", row.expectedCallBounds, random.callBounds)
+        }
+    }
+
+    @Test
     fun `pity counter stays unchanged for minimum and repeated done stages`() {
         val minimum = calculateHabitReward(
             CompletionState.MINIMUM, Difficulty.EASY, 0, false, emptyMap(), 0,
@@ -239,6 +268,17 @@ class HabitRewardCalculatorTest {
             val value = rolls.getOrElse(index) { rolls.last() }
             index += 1
             return value.coerceIn(0, boundExclusive - 1)
+        }
+    }
+
+    private class RecordingRewardRandom(values: List<Int>) : com.habitat.app.domain.logic.RewardRandom {
+        private val rolls = values
+        private var index = 0
+        val callBounds = mutableListOf<Int>()
+
+        override fun nextInt(boundExclusive: Int): Int {
+            callBounds += boundExclusive
+            return rolls[index++].coerceIn(0, boundExclusive - 1)
         }
     }
 }
