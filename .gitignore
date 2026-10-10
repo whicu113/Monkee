@@ -14,3 +14,4 @@ local.properties
 alarm.txt
 build/
 app/build/
+.idea/deploymentTargetSelector.xml
