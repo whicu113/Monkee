@@ -10,6 +10,7 @@ import com.habitat.app.domain.createLogCompletionUseCaseFixture
 import com.habitat.app.domain.repository.PlayerEconomyRepository
 import com.habitat.app.ui.habit.HabitListUiState
 import com.habitat.app.ui.habit.HabitViewModel
+import com.habitat.app.platform.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
@@ -33,6 +34,7 @@ class HabitViewModelEconomyTest {
     fun economyFlowsUpdateSeedsAndLevelInViewModelState() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
+        val previousAlarmGateway = ReminderScheduler.alarmGateway
         val viewModelStore = ViewModelStore()
         var collection: kotlinx.coroutines.Job? = null
 
@@ -80,11 +82,20 @@ class HabitViewModelEconomyTest {
             assertEquals("100 XP reaches level two", 2L, updated.level)
             assertEquals("level two starts at zero XP", 0L, updated.xpIntoLevel)
             assertEquals("level two requires 125 XP", 125L, updated.xpRequiredForNextLevel)
+            assertEquals("100 XP starts level-two progress at zero", 0f, updated.xpProgressFraction)
             assertEquals("Seeds balance follows repository emission", 42L, updated.seedsBalance)
+
+            economy.xpTotal.value = 150L
+            advanceUntilIdle()
+
+            val halfway = states.last()
+            assertEquals("150 XP is 50 XP into level two", 50L, halfway.xpIntoLevel)
+            assertEquals("150 XP progress is 50 of 125", 0.4f, halfway.xpProgressFraction)
         } finally {
             collection?.cancel()
             viewModelStore.clear()
             advanceUntilIdle()
+            ReminderScheduler.alarmGateway = previousAlarmGateway
             Dispatchers.resetMain()
         }
     }
