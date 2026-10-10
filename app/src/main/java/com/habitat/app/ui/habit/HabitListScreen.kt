@@ -180,14 +180,17 @@ fun HabitListScreen(
                             Button(onClick = { viewModel.reconcileNow() }) {
                                 Text("Reconcile", fontSize = 10.sp)
                             }
-                            Button(onClick = { viewModel.fireRemindersNow() }) {
+                            Button(onClick = { viewModel.fireRemindersNow(forcePost = false) }) {
                                 Text("Fire reminders now", fontSize = 10.sp)
+                            }
+                            OutlinedButton(onClick = { viewModel.fireRemindersNow(forcePost = true) }) {
+                                Text("Force post", fontSize = 10.sp)
                             }
                         }
                         uiState.debugFireResult?.let { result ->
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Result: $result",
+                                text = "Reminder Results:\n$result",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary
                             )

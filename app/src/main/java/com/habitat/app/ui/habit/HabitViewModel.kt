@@ -13,12 +13,15 @@ import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.model.LoggedCompletion
 import com.habitat.app.domain.model.OccurrenceState
+import com.habitat.app.domain.model.ScheduleType
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
 import com.habitat.app.domain.repository.SettingsRepository
 import com.habitat.app.domain.usecase.LogCompletionUseCase
 import com.habitat.app.platform.NotificationHelper
 import com.habitat.app.platform.ReminderScheduler
+import android.util.Log
+import com.habitat.app.platform.ReminderFulfillmentHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,6 +62,7 @@ class HabitViewModel @Inject constructor(
     private val completionRepository: CompletionRepository,
     private val settingsRepository: SettingsRepository,
     private val logCompletionUseCase: LogCompletionUseCase,
+    private val reminderFulfillmentHandler: ReminderFulfillmentHandler,
     private val clock: AppClock
 ) : ViewModel() {
 
@@ -193,43 +197,41 @@ class HabitViewModel @Inject constructor(
         }
     }
 
-    fun fireRemindersNow() {
+    fun fireRemindersNow(forcePost: Boolean = false) {
+        Log.d("HabitatDebug", "fireRemindersNow clicked, forcePost=$forcePost")
         viewModelScope.launch {
             val habits = habitRepository.getActiveHabits().first()
-            val settings = settingsRepository.getSettings().first()
-            val today = clock.logicalDate()
-            val postedIds = settingsRepository.getPostedHabitIds(today.toString())
+            val habitsWithReminders = habits.filter { it.reminderTime != null && !it.archived && it.schedule !is ScheduleType.Unknown }
+            val targetHabits = if (forcePost) habitsWithReminders else habits
+
+            if (targetHabits.isEmpty()) {
+                val msg = if (forcePost) "No active habits with reminder set" else "No active habits"
+                Log.d("HabitatDebug", msg)
+                debugFireResultFlow.value = msg
+                return@launch
+            }
+
             val results = mutableListOf<String>()
 
-            for (habit in habits) {
-                val completions = completionRepository.getCompletionsForHabit(habit.id).first()
-                val isLoggedToday = completions.any { it.logicalDate == today }
-                val scheduledTime = habit.reminderTime ?: clock.zonedDateTime().toLocalTime()
-                val scheduledInstant = java.time.LocalDateTime.of(today, scheduledTime).atZone(clock.zoneId()).toInstant()
-
-                val decision = ReminderEngine.evaluateFireTimeDecision(
-                    habit = habit,
-                    scheduledInstant = scheduledInstant,
-                    nowInstant = clock.instant(),
-                    zoneId = clock.zoneId(),
-                    quietHoursEnabled = settings.quietHoursEnabled,
-                    quietHoursStart = settings.quietHoursStart,
-                    quietHoursEnd = settings.quietHoursEnd,
-                    isLoggedToday = isLoggedToday,
-                    isWeeklyQuotaMet = false,
-                    postedIdsToday = postedIds,
-                    currentLogicalDate = today
+            for (habit in targetHabits) {
+                val decision = reminderFulfillmentHandler.execute(
+                    context = context,
+                    habitId = habit.id,
+                    intentDateStr = null,
+                    forcePost = forcePost
                 )
 
                 val summary = when (decision) {
                     is FireDecision.Post -> "Posted"
                     is FireDecision.Summary -> "Summary"
                     is FireDecision.Drop -> "Dropped (${decision.reason})"
+                    null -> "Dropped (not found or archived)"
                 }
+                Log.d("HabitatDebug", "Habit '${habit.name}': $summary")
                 results.add("${habit.name}: $summary")
             }
 
-            debugFireResultFlow.value = if (results.isEmpty()) "No active habits" else results.joinToString(" | ")
+            debugFireResultFlow.value = results.joinToString("\n")
         }
     }
 }
