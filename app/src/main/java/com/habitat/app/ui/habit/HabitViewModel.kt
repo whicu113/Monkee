@@ -23,6 +23,7 @@ import com.habitat.app.domain.repository.PlayerEconomyRepository
 import com.habitat.app.domain.repository.SettingsRepository
 import com.habitat.app.domain.playerXpProgress
 import com.habitat.app.domain.usecase.LogCompletionUseCase
+import com.habitat.app.ui.reward.RewardMessageSpec
 import com.habitat.app.platform.NotificationHelper
 import com.habitat.app.platform.ReminderScheduler
 import android.util.Log
@@ -31,6 +32,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -89,6 +92,8 @@ class HabitViewModel @Inject constructor(
 
     private val selectedDateFlow = MutableStateFlow<LocalDate?>(null)
     private val debugFireResultFlow = MutableStateFlow<String?>(null)
+    private val rewardMessageChannel = Channel<List<RewardMessageSpec>>(Channel.CONFLATED)
+    val rewardMessageEvents: Flow<List<RewardMessageSpec>> = rewardMessageChannel.receiveAsFlow()
 
     private val habitUiState: Flow<HabitListUiState> = combine(
         habitRepository.getActiveHabits(),

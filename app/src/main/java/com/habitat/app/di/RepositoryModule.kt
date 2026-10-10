@@ -5,6 +5,8 @@ import com.habitat.app.data.repository.HabitRepositoryImpl
 import com.habitat.app.data.repository.SettingsRepositoryImpl
 import com.habitat.app.data.local.RoomRewardTransactionRunner
 import com.habitat.app.domain.RewardTransactionRunner
+import com.habitat.app.domain.usecase.LogCompletionResultUseCase
+import com.habitat.app.domain.usecase.LogCompletionUseCase
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
 import com.habitat.app.domain.repository.SettingsRepository
@@ -17,6 +19,12 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindLogCompletionResultUseCase(
+        impl: LogCompletionUseCase
+    ): LogCompletionResultUseCase
 
     @Binds
     @Singleton

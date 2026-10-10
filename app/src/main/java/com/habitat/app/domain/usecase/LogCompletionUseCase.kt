@@ -42,7 +42,7 @@ class LogCompletionUseCase @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val transactionRunner: RewardTransactionRunner,
     private val rewardRandom: RewardRandom
-) : WidgetCompletionLogger {
+) : WidgetCompletionLogger, LogCompletionResultUseCase {
 
     override suspend fun executeLog(
         habitId: String,
@@ -50,7 +50,7 @@ class LogCompletionUseCase @Inject constructor(
         logicalDate: LocalDate
     ): Boolean = executeLogInternal(habitId, state, logicalDate).accepted
 
-    suspend fun executeLogWithResult(
+    override suspend fun executeLogWithResult(
         habitId: String,
         state: CompletionState,
         logicalDate: LocalDate
