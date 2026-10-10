@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_surface">#FFF8F0</color>
+    <color name="widget_text_primary">#1B2B22</color>
+    <color name="widget_text_secondary">#52645A</color>
+    <color name="widget_action_surface">#DCEFE0</color>
+    <color name="widget_action_text">#245C35</color>
+    <color name="widget_ring_track">#55889678</color>
+    <color name="widget_ring_progress">#2E7D46</color>
+    <color name="widget_ring_neutral">#79857E</color>
+</resources>

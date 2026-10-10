@@ -5,11 +5,11 @@
     android:viewportHeight="100">
     <path
         android:pathData="M 50,10 A 40,40 0 1 0 50,90 A 40,40 0 1 0 50,10"
-        android:strokeColor="#33888888"
+        android:strokeColor="@color/widget_ring_track"
         android:strokeWidth="8"
         android:strokeLineCap="round" />
     <path
         android:pathData="M 50,10 A 40,40 0 1 0 50,90 A 40,40 0 1 0 50,10"
-        android:strokeColor="#55888888"
+        android:strokeColor="@color/widget_ring_neutral"
         android:strokeWidth="2" />
 </vector>

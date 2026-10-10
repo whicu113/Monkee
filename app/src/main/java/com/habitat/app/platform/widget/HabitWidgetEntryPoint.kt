@@ -1,0 +1,18 @@
+package com.habitat.app.platform.widget
+
+import com.habitat.app.domain.AppClock
+import com.habitat.app.domain.repository.CompletionRepository
+import com.habitat.app.domain.repository.HabitRepository
+import com.habitat.app.domain.repository.SettingsRepository
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface HabitWidgetEntryPoint {
+    fun habitRepository(): HabitRepository
+    fun completionRepository(): CompletionRepository
+    fun settingsRepository(): SettingsRepository
+    fun appClock(): AppClock
+}
