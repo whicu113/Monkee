@@ -48,7 +48,6 @@ import com.habitat.app.domain.logic.WidgetRowActionState
 import com.habitat.app.domain.logic.WidgetStateBuilder
 import com.habitat.app.domain.logic.widgetCompletionDecision
 import com.habitat.app.domain.model.CompletionState
-import com.habitat.app.domain.model.ScheduleType
 import com.habitat.app.domain.logic.rowActions
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CancellationException
@@ -463,13 +462,18 @@ class WidgetCompletionActionCallback : ActionCallback {
             val currentDate = entryPoint.appClock().logicalDate(settings.dayBoundaryHour)
             val habit = entryPoint.habitRepository().getHabitById(habitId)
             val existing = entryPoint.completionRepository().getCompletion(habitId, renderedDate)
+            val habitCompletions = entryPoint.completionRepository()
+                .getCompletionsForHabit(habitId)
+                .first()
             val decision = widgetCompletionDecision(
                 renderedDate = renderedDate,
                 currentLogicalDate = currentDate,
                 alreadyLogged = existing != null,
                 habitExists = habit != null,
                 habitArchived = habit?.archived == true,
-                scheduleUnknown = habit?.schedule is ScheduleType.Unknown
+                schedule = habit?.schedule,
+                startOfWeekDay = settings.startOfWeekDay,
+                habitCompletions = habitCompletions
             )
             if (decision == WidgetCompletionDecision.LOG_AND_REFRESH) {
                 entryPoint.logCompletionUseCase().executeLog(habitId, completionState, renderedDate)
