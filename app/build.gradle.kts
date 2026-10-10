@@ -46,7 +46,7 @@ android {
     sourceSets {
         getByName("androidTest").assets.directories.add("$projectDir/schemas")
         getByName("benchmark") {
-            java.directories.add("src/debug/java")
+            kotlin.directories += "$projectDir/src/debug/java"
             manifest.srcFile("src/benchmark/AndroidManifest.xml")
         }
     }
