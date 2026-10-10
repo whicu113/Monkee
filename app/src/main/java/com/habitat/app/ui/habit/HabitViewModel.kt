@@ -202,7 +202,7 @@ class HabitViewModel @Inject constructor(
 
     fun toggleCheckOff(habitId: String, state: CompletionState, date: LocalDate) {
         viewModelScope.launch {
-            logCompletionUseCase.executeLog(habitId, state, date)
+            logCompletionUseCase.executeLogWithResult(habitId, state, date)
         }
     }
 
