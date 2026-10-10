@@ -1,7 +1,9 @@
 package com.habitat.app.platform
 
 import android.content.Context
+import android.util.Log
 import com.habitat.app.domain.AppClock
+import com.habitat.app.domain.logic.DropReason
 import com.habitat.app.domain.logic.FireDecision
 import com.habitat.app.domain.logic.ReminderEngine
 import com.habitat.app.domain.logic.ScheduleEvaluator
@@ -34,10 +36,13 @@ class ReminderFulfillmentHandler @Inject constructor(
     private val notifier: NotificationNotifier = SystemNotificationNotifier()
 ) {
 
+    private val tag = "HabitatDebug"
+
     suspend fun execute(
         context: Context,
         habitId: String,
-        intentDateStr: String?
+        intentDateStr: String?,
+        forcePost: Boolean = false
     ): FireDecision? {
         val habit = habitRepository.getHabitById(habitId) ?: return null
         if (habit.archived || habit.schedule is ScheduleType.Unknown) return null
@@ -83,23 +88,32 @@ class ReminderFulfillmentHandler @Inject constructor(
         val scheduledTime = habit.reminderTime ?: clock.zonedDateTime().toLocalTime()
         val scheduledInstant = LocalDateTime.of(today, scheduledTime).atZone(clock.zoneId()).toInstant()
 
-        val decision = ReminderEngine.evaluateFireTimeDecision(
-            habit = habit,
-            scheduledInstant = scheduledInstant,
-            nowInstant = clock.instant(),
-            zoneId = clock.zoneId(),
-            quietHoursEnabled = settings.quietHoursEnabled,
-            quietHoursStart = settings.quietHoursStart,
-            quietHoursEnd = settings.quietHoursEnd,
-            isLoggedToday = isLoggedToday,
-            isWeeklyQuotaMet = isWeeklyQuotaMet,
-            postedIdsToday = postedIds,
-            currentLogicalDate = today
-        )
+        val decision = if (forcePost) {
+            Log.d(tag, "Habit ${habit.name} (${habit.id}): Force post mode active, bypassing eligibility checks")
+            FireDecision.Post
+        } else {
+            val eval = ReminderEngine.evaluateFireTimeDecision(
+                habit = habit,
+                scheduledInstant = scheduledInstant,
+                nowInstant = clock.instant(),
+                zoneId = clock.zoneId(),
+                quietHoursEnabled = settings.quietHoursEnabled,
+                quietHoursStart = settings.quietHoursStart,
+                quietHoursEnd = settings.quietHoursEnd,
+                isLoggedToday = isLoggedToday,
+                isWeeklyQuotaMet = isWeeklyQuotaMet,
+                postedIdsToday = postedIds,
+                currentLogicalDate = today
+            )
+            Log.d(tag, "Habit ${habit.name} (${habit.id}): Decision = $eval")
+            eval
+        }
 
         when (decision) {
             is FireDecision.Post -> {
-                settingsRepository.addPostedHabitId(today.toString(), habitId)
+                if (!forcePost) {
+                    settingsRepository.addPostedHabitId(today.toString(), habitId)
+                }
                 notifier.postHabitNotification(
                     context = context,
                     habit = habit,
@@ -108,6 +122,7 @@ class ReminderFulfillmentHandler @Inject constructor(
                 )
             }
             is FireDecision.Summary -> {
+                settingsRepository.addPostedHabitId(today.toString(), habitId)
                 val habits = habitRepository.getActiveHabits().first()
                 val overflow = habits.filter { it.id !in postedIds }
                 notifier.postSummaryNotification(

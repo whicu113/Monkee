@@ -232,4 +232,90 @@ class ReminderReceiverLogicTest {
         // Alarm was still re-armed for the next occurrence
         assertTrue(gateway.isAlarmScheduled(DummyContext(), "hw", "alarm"))
     }
+
+    @Test
+    fun `NPerWeek habit does not count SKIPPED toward weekly quota`() = runTest {
+        // 2 per week habit, created Mon May 5
+        val habit = Habit(
+            id = "hw",
+            name = "Weekly Habit",
+            schedule = ScheduleType.NPerWeek(n = 2),
+            reminderTime = LocalTime.of(9, 0)
+        )
+        val habitRepo = FakeHabitRepository()
+        habitRepo.saveHabit(habit)
+
+        val completionRepo = CompletionRepositoryImpl(FakeCompletionDao())
+        val settingsRepo = FakeSettingsRepository()
+        val gateway = FakeAlarmGateway()
+        ReminderScheduler.alarmGateway = gateway
+        val notifier = FakeNotificationNotifier()
+
+        // 1 DONE and 1 SKIPPED: SKIPPED does NOT satisfy the quota (needs 2 DONE/MINIMUM)
+        completionRepo.logCompletion(
+            LoggedCompletion(habitId = "hw", logicalDate = LocalDate.of(2025, 5, 7), state = CompletionState.DONE)
+        )
+        completionRepo.logCompletion(
+            LoggedCompletion(habitId = "hw", logicalDate = LocalDate.of(2025, 5, 8), state = CompletionState.SKIPPED)
+        )
+
+        val handler = ReminderFulfillmentHandler(
+            habitRepository = habitRepo,
+            completionRepository = completionRepo,
+            settingsRepository = settingsRepo,
+            clock = clock,
+            notifier = notifier
+        )
+
+        val decision = handler.execute(DummyContext(), "hw", null)
+
+        // Quota is NOT met (only 1 valid completion), so reminder Posts
+        assertEquals(FireDecision.Post, decision)
+        assertEquals(setOf("hw"), settingsRepo.getPostedHabitIds(fixedToday.toString()))
+        assertEquals(1, notifier.postedHabits.size)
+    }
+
+    @Test
+    fun `normal mode drops duplicate but force mode posts without modifying posted-ids`() = runTest {
+        val habit = Habit(
+            id = "h1",
+            name = "Test Habit",
+            schedule = ScheduleType.Daily,
+            reminderTime = LocalTime.of(9, 0)
+        )
+        val habitRepo = FakeHabitRepository()
+        habitRepo.saveHabit(habit)
+
+        val completionRepo = CompletionRepositoryImpl(FakeCompletionDao())
+        val settingsRepo = FakeSettingsRepository()
+        val gateway = FakeAlarmGateway()
+        ReminderScheduler.alarmGateway = gateway
+        val notifier = FakeNotificationNotifier()
+
+        val handler = ReminderFulfillmentHandler(
+            habitRepository = habitRepo,
+            completionRepository = completionRepo,
+            settingsRepository = settingsRepo,
+            clock = clock,
+            notifier = notifier
+        )
+
+        // Pre-populate posted IDs so normal mode detects duplicate
+        settingsRepo.addPostedHabitId(fixedToday.toString(), "h1")
+        assertEquals(setOf("h1"), settingsRepo.getPostedHabitIds(fixedToday.toString()))
+
+        // 1. Normal mode: drops duplicate
+        val decisionNormal = handler.execute(DummyContext(), "h1", null, forcePost = false)
+        assertEquals(FireDecision.Drop(DropReason.Duplicate), decisionNormal)
+        assertEquals(0, notifier.postedHabits.size)
+        assertEquals(setOf("h1"), settingsRepo.getPostedHabitIds(fixedToday.toString()))
+
+        // 2. Force post mode: bypasses duplicate, posts notification, and leaves posted-ids untouched
+        val decisionForce = handler.execute(DummyContext(), "h1", null, forcePost = true)
+        assertEquals(FireDecision.Post, decisionForce)
+        assertEquals(1, notifier.postedHabits.size)
+        assertEquals("h1", notifier.postedHabits[0].id)
+        // posted-ids set is not modified by force mode
+        assertEquals(setOf("h1"), settingsRepo.getPostedHabitIds(fixedToday.toString()))
+    }
 }
