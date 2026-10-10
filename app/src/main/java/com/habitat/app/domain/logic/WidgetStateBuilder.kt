@@ -43,13 +43,12 @@ sealed class WidgetDisplayState {
      * All due habits were skipped today.
      * Distinct from NothingDueToday so the widget can show a different message.
      */
-    object AllSkipped : WidgetDisplayState()
+    data class AllSkipped(val rows: List<WidgetHabitRow>) : WidgetDisplayState()
 
     /**
      * One or more habits are due today (skipped habits remain in the list).
      *
-     * @param rows           Up to [ROW_CAP] rows to render (skipped and completed habits included).
-     * @param remainingCount Number of due habits beyond the cap (shown as "+N more").
+     * @param rows           All due rows (skipped and completed habits included).
      * @param completedCount Number of due habits completed (DONE or MINIMUM) today.
      * @param totalDueCount  Total number of due habits (skipped habits NOT counted in denominator).
      * @param progressFraction [completedCount] / [totalDueCount], or 0 if [totalDueCount] == 0.
@@ -57,16 +56,12 @@ sealed class WidgetDisplayState {
      */
     data class Habits(
         val rows: List<WidgetHabitRow>,
-        val remainingCount: Int,
         val completedCount: Int,
         val totalDueCount: Int,
         val progressFraction: Float,
         val allCompleted: Boolean
     ) : WidgetDisplayState()
 
-    companion object {
-        const val ROW_CAP = 5
-    }
 }
 
 /**
@@ -79,8 +74,9 @@ sealed class WidgetDisplayState {
  * - A habit is **due** if it is scheduled today ([ScheduleEvaluator.isScheduledOn]) AND its weekly quota
  *   has not yet been met (![ScheduleEvaluator.isWeeklyQuotaMet]). Non-NPerWeek habits scheduled today are always due.
  * - Due habits stay in rows even after they are completed or skipped.
- * - Rows are ordered matching the app list: by group ([Habit.groupId] nulls-first), then by [Habit.sortOrder].
- * - Rows are capped at [WidgetDisplayState.ROW_CAP]; excess is reported as remainingCount.
+ * - Pending rows appear first, then DONE, MINIMUM, and SKIPPED rows; each status follows app-list order
+ *   by group ([Habit.groupId] nulls-first), then by [Habit.sortOrder].
+ * - Every due habit is returned; the scrollable widget list has no row cap.
  * - SKIPPED habits are NOT counted in [WidgetDisplayState.Habits.totalDueCount] or
  *   [WidgetDisplayState.Habits.completedCount] so they don't inflate the denominator.
  * - The builder is pure Kotlin with no Android dependencies.
@@ -120,22 +116,30 @@ object WidgetStateBuilder {
 
         if (dueHabits.isEmpty()) return WidgetDisplayState.NothingDueToday
 
+        val completionForToday: (Habit) -> CompletionState? = { habit ->
+            completionsByHabit[habit.id]?.firstOrNull { it.logicalDate == today }?.state
+        }
         val sortedDueHabits = dueHabits.sortedWith(
-            compareBy<Habit> { it.groupId ?: "" }
+            compareBy<Habit> {
+                when (completionForToday(it)) {
+                    null -> 0
+                    CompletionState.DONE -> 1
+                    CompletionState.MINIMUM -> 2
+                    CompletionState.SKIPPED -> 3
+                }
+            }
+                .thenBy { it.groupId ?: "" }
                 .thenBy { it.sortOrder }
         )
 
-        val rows = sortedDueHabits.take(WidgetDisplayState.ROW_CAP).map { habit ->
-            val todayComp = completionsByHabit[habit.id]
-                ?.firstOrNull { it.logicalDate == today }
+        val rows = sortedDueHabits.map { habit ->
             WidgetHabitRow(
                 habitId = habit.id,
                 name = habit.name,
                 emoji = habit.emoji,
-                completionState = todayComp?.state
+                completionState = completionForToday(habit)
             )
         }
-        val remainingCount = (sortedDueHabits.size - WidgetDisplayState.ROW_CAP).coerceAtLeast(0)
 
         val completedCount = sortedDueHabits.count { habit ->
             val state = completionsByHabit[habit.id]
@@ -149,14 +153,13 @@ object WidgetStateBuilder {
         val totalDueCount = sortedDueHabits.size - skippedCount
         val allSkipped = skippedCount == sortedDueHabits.size
 
-        if (allSkipped) return WidgetDisplayState.AllSkipped
+        if (allSkipped) return WidgetDisplayState.AllSkipped(rows)
 
         val progressFraction = if (totalDueCount > 0) completedCount.toFloat() / totalDueCount else 0f
         val allCompleted = totalDueCount > 0 && completedCount == totalDueCount
 
         return WidgetDisplayState.Habits(
             rows = rows,
-            remainingCount = remainingCount,
             completedCount = completedCount,
             totalDueCount = totalDueCount,
             progressFraction = progressFraction,

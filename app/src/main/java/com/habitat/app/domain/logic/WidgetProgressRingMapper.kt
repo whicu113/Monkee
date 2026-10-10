@@ -31,6 +31,6 @@ object WidgetProgressRingMapper {
         is WidgetDisplayState.Habits -> progressRingIndex(state.progressFraction)
         WidgetDisplayState.NoHabits,
         WidgetDisplayState.NothingDueToday,
-        WidgetDisplayState.AllSkipped -> null
+        is WidgetDisplayState.AllSkipped -> null
     }
 }

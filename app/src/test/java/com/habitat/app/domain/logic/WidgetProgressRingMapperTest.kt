@@ -25,7 +25,11 @@ class WidgetProgressRingMapperTest {
         TestCase(habitsState(-0.01f), 0, "negative fraction clamps to index 0"),
         TestCase(habitsState(1.01f), 10, "fraction above one clamps to index 10"),
         TestCase(WidgetDisplayState.NothingDueToday, null, "nothing due uses the neutral ring"),
-        TestCase(WidgetDisplayState.AllSkipped, null, "all skipped uses the neutral ring"),
+        TestCase(
+            WidgetDisplayState.AllSkipped(listOf(WidgetHabitRow("habit-1", "Read", "📖", CompletionState.SKIPPED))),
+            null,
+            "all skipped uses the neutral ring"
+        ),
         TestCase(WidgetDisplayState.NoHabits, null, "no habits has no progress ring")
     )
 
@@ -39,7 +43,6 @@ class WidgetProgressRingMapperTest {
 
     private fun habitsState(fraction: Float) = WidgetDisplayState.Habits(
         rows = listOf(WidgetHabitRow("habit-1", "Read", "📖", CompletionState.DONE)),
-        remainingCount = 0,
         completedCount = 1,
         totalDueCount = 1,
         progressFraction = fraction,

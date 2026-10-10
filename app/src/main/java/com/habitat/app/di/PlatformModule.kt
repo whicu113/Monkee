@@ -1,6 +1,7 @@
 package com.habitat.app.di
 
 import com.habitat.app.domain.WidgetUpdater
+import com.habitat.app.domain.WidgetRefreshSignal
 import com.habitat.app.domain.usecase.CompletionReminderHandler
 import com.habitat.app.platform.PlatformCompletionReminderHandler
 import com.habitat.app.platform.NotificationNotifier
@@ -26,6 +27,10 @@ abstract class PlatformModule {
     @Binds
     @Singleton
     abstract fun bindWidgetUpdater(impl: GlanceWidgetUpdater): WidgetUpdater
+
+    @Binds
+    @Singleton
+    abstract fun bindWidgetRefreshSignal(impl: GlanceWidgetUpdater): WidgetRefreshSignal
 
     companion object {
         @Provides

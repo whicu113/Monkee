@@ -151,7 +151,9 @@ class WidgetStateBuilderTest {
             comp("2", today, CompletionState.SKIPPED)
         )
         val state = build(habits, completions)
-        assertEquals(WidgetDisplayState.AllSkipped, state)
+        assertTrue("all skipped due rows retain their list", state is WidgetDisplayState.AllSkipped)
+        assertEquals("skipped row 1", "1", (state as WidgetDisplayState.AllSkipped).rows[0].habitId)
+        assertEquals("skipped row 2", "2", state.rows[1].habitId)
     }
 
     // ── Habits (normal) ───────────────────────────────────────────────────────
@@ -170,7 +172,6 @@ class WidgetStateBuilderTest {
         assertEquals(2, h.totalDueCount)
         assertEquals(1.0f, h.progressFraction, 0.001f)
         assertTrue(h.allCompleted)
-        assertEquals(0, h.remainingCount)
         assertTrue(h.rows.all { it.isCompleted })
     }
 
@@ -206,26 +207,66 @@ class WidgetStateBuilderTest {
     }
 
     @Test
-    fun `10 habits caps rows at 5 with correct remainingCount`() {
-        val habits = (1..10).map { habit(it.toString()) }
-        val state = build(habits, emptyList())
-        assertTrue(state is WidgetDisplayState.Habits)
-        val h = state as WidgetDisplayState.Habits
-        assertEquals(5, h.rows.size)
-        assertEquals(5, h.remainingCount)
-        assertEquals(10, h.totalDueCount)
-        assertEquals(0, h.completedCount)
-        assertEquals(0.0f, h.progressFraction, 0.001f)
-    }
+    fun `due widget rows include every habit ordered by pending then completion state`() {
+        data class RowCase(
+            val name: String,
+            val habits: List<Habit>,
+            val completions: List<LoggedCompletion>,
+            val expectedIds: List<String>,
+            val expectedCompletedCount: Int,
+            val expectedTotalDueCount: Int
+        )
 
-    @Test
-    fun `12 habits caps rows at 5 with remainingCount 7`() {
-        val habits = (1..12).map { habit(it.toString()) }
-        val state = build(habits, emptyList())
-        assertTrue(state is WidgetDisplayState.Habits)
-        val h = state as WidgetDisplayState.Habits
-        assertEquals(5, h.rows.size)
-        assertEquals(7, h.remainingCount)
+        val mixedHabits = listOf(
+            habit("done-1", sortOrder = 0),
+            habit("pending-1", sortOrder = 1),
+            habit("minimum-1", sortOrder = 2),
+            habit("pending-2", sortOrder = 3),
+            habit("skipped-1", sortOrder = 4),
+            habit("pending-3", sortOrder = 5),
+            habit("done-2", sortOrder = 6),
+            habit("minimum-2", sortOrder = 7)
+        )
+        val mixedCompletions = listOf(
+            comp("done-1", today, CompletionState.DONE),
+            comp("minimum-1", today, CompletionState.MINIMUM),
+            comp("skipped-1", today, CompletionState.SKIPPED),
+            comp("done-2", today, CompletionState.DONE),
+            comp("minimum-2", today, CompletionState.MINIMUM)
+        )
+        val cases = listOf(
+            RowCase(
+                name = "mixed pending and completed rows",
+                habits = mixedHabits,
+                completions = mixedCompletions,
+                expectedIds = listOf(
+                    "pending-1", "pending-2", "pending-3", "done-1", "done-2",
+                    "minimum-1", "minimum-2", "skipped-1"
+                ),
+                expectedCompletedCount = 4,
+                expectedTotalDueCount = 7
+            ),
+            RowCase(
+                name = "seven pending rows exceed the old cap",
+                habits = (1..7).map { habit("pending-$it", sortOrder = it) },
+                completions = emptyList(),
+                expectedIds = (1..7).map { "pending-$it" },
+                expectedCompletedCount = 0,
+                expectedTotalDueCount = 7
+            )
+        )
+
+        cases.forEach { case ->
+            val state = build(case.habits, case.completions)
+            assertTrue("${case.name}: state should contain due rows", state is WidgetDisplayState.Habits)
+            val actual = state as WidgetDisplayState.Habits
+            case.expectedIds.forEachIndexed { index, expectedId ->
+                assertEquals("${case.name}: row $expectedId", expectedId, actual.rows.getOrNull(index)?.habitId)
+            }
+            assertEquals("${case.name}: all due rows are present", case.expectedIds.size, actual.rows.size)
+            assertEquals("${case.name}: completed count unchanged", case.expectedCompletedCount, actual.completedCount)
+            assertEquals("${case.name}: due count unchanged", case.expectedTotalDueCount, actual.totalDueCount)
+        }
     }
 
     // ── Week-start and quota tests ────────────────────────────────────────────
