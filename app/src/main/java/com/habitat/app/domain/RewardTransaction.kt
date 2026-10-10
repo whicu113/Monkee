@@ -53,11 +53,15 @@ interface RewardDropTransactionPort {
     suspend fun insert(record: RewardDropRecord)
 }
 
+enum class LedgerReason {
+    HABIT_REWARD
+}
+
 data class RewardLedgerEntry(
     val id: Long = 0,
     val currency: RewardCurrency,
     val delta: Long,
-    val reason: String,
+    val reason: LedgerReason,
     val habitId: String?,
     val logicalDate: LocalDate?,
     val createdAt: Instant,

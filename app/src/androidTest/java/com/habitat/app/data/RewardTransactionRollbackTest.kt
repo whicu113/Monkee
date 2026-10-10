@@ -9,6 +9,7 @@ import com.habitat.app.data.local.DropRecordEntity
 import com.habitat.app.data.local.RoomRewardTransactionRunner
 import com.habitat.app.domain.RewardDropRecord
 import com.habitat.app.domain.RewardLedgerEntry
+import com.habitat.app.domain.LedgerReason
 import com.habitat.app.domain.logic.DropRarity
 import com.habitat.app.domain.logic.RewardCurrency
 import com.habitat.app.domain.logic.RewardStage
@@ -76,7 +77,7 @@ class RewardTransactionRollbackTest {
                     RewardLedgerEntry(
                         currency = RewardCurrency.SEEDS,
                         delta = 10,
-                        reason = "HABIT_REWARD",
+                        reason = LedgerReason.HABIT_REWARD,
                         habitId = HABIT_ID,
                         logicalDate = LOGICAL_DATE,
                         createdAt = CREATED_AT,

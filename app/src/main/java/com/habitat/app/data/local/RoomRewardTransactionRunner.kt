@@ -7,6 +7,7 @@ import com.habitat.app.domain.RewardDropTransactionPort
 import com.habitat.app.domain.RewardHabitTransactionPort
 import com.habitat.app.domain.RewardLedgerEntry
 import com.habitat.app.domain.RewardLedgerTransactionPort
+import com.habitat.app.domain.LedgerReason
 import com.habitat.app.domain.RewardTransactionRunner
 import com.habitat.app.domain.RewardTransactionScope
 import com.habitat.app.domain.logic.DropRarity
@@ -107,7 +108,7 @@ private fun LedgerEntryEntity.toDomainModel() = RewardLedgerEntry(
     id = id,
     currency = RewardCurrency.valueOf(currency),
     delta = delta,
-    reason = reason,
+    reason = LedgerReasonDatabaseMapper.fromDatabaseValue(reason),
     habitId = habitId,
     logicalDate = logicalDate,
     createdAt = createdAt,
@@ -124,7 +125,7 @@ private fun RewardLedgerEntry.toEntity() = LedgerEntryEntity(
     id = id,
     currency = currency.name,
     delta = delta,
-    reason = reason,
+    reason = LedgerReasonDatabaseMapper.toDatabaseValue(reason),
     habitId = habitId,
     logicalDate = logicalDate,
     createdAt = createdAt,
