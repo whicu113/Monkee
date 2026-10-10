@@ -17,6 +17,8 @@ object GameConfig {
     const val COMEBACK_SEEDS_MULTIPLIER: Double = 1.5
     const val MAX_STREAK_SEEDS_BONUS: Int = 10
     const val HABIT_XP_PER_STAGE: Int = 10
+    const val XP_TO_NEXT_LEVEL_BASE: Long = 100L
+    const val XP_TO_NEXT_LEVEL_STEP: Long = 25L
     const val HABIT_DROP_CHANCE_PERCENT: Int = 5
     const val HABIT_DROP_PITY_COUNT: Int = 30
     const val DROP_RARITY_COMMON_WEIGHT: Int = 70
