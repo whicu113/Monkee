@@ -23,9 +23,17 @@ import javax.inject.Singleton
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "app_settings")
 
 @Singleton
-class SettingsRepositoryImpl @Inject constructor(
-    @param:ApplicationContext private val context: Context
+class SettingsRepositoryImpl private constructor(
+    private val dataStore: DataStore<Preferences>
 ) : SettingsRepository {
+
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(context.dataStore)
+
+    companion object {
+        internal fun withDataStore(dataStore: DataStore<Preferences>): SettingsRepositoryImpl =
+            SettingsRepositoryImpl(dataStore)
+    }
 
     private object Keys {
         val DAY_BOUNDARY = intPreferencesKey("day_boundary_hour")
@@ -39,7 +47,7 @@ class SettingsRepositoryImpl @Inject constructor(
     }
 
     override fun getSettings(): Flow<AppSettings> {
-        return context.dataStore.data.map { prefs ->
+        return dataStore.data.map { prefs ->
             val defaults = AppSettings()
             AppSettings(
                 dayBoundaryHour = prefs[Keys.DAY_BOUNDARY] ?: defaults.dayBoundaryHour,
@@ -55,7 +63,7 @@ class SettingsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateSettings(settings: AppSettings) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.DAY_BOUNDARY] = settings.dayBoundaryHour
             prefs[Keys.QUIET_ENABLED] = settings.quietHoursEnabled
             prefs[Keys.QUIET_START] = settings.quietHoursStart.toString()
@@ -69,12 +77,12 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun getPostedHabitIds(logicalDateString: String): Set<String> {
         val key = stringSetPreferencesKey("posted_ids_$logicalDateString")
-        return context.dataStore.data.first()[key] ?: emptySet()
+        return dataStore.data.first()[key] ?: emptySet()
     }
 
     override suspend fun addPostedHabitId(logicalDateString: String, habitId: String) {
         val key = stringSetPreferencesKey("posted_ids_$logicalDateString")
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val current = prefs[key] ?: emptySet()
             prefs[key] = current + habitId
         }
@@ -82,13 +90,13 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun clearPostedHabitIds(logicalDateString: String) {
         val key = stringSetPreferencesKey("posted_ids_$logicalDateString")
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs.remove(key)
         }
     }
 
     override suspend fun pruneOldPostedHabitIds(cutoffDateString: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val keysToRemove = prefs.asMap().keys.filter { key ->
                 key.name.startsWith("posted_ids_") && key.name.removePrefix("posted_ids_") < cutoffDateString
             }
