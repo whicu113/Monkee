@@ -20,11 +20,14 @@ class RewardSchemaMigrationTest {
     )
 
     @Test
-    fun migration3To4PreservesRowsAndCreatesRewardSchema() {
-        helper.createDatabase(TEST_DB, 3).apply {
+    fun migration1To4PreservesRowsAndCreatesRewardSchema() {
+        helper.createDatabase(TEST_DB, 1).apply {
             execSQL(
-                "INSERT INTO habits (id, name, emoji, color, cue, fullVersion, minVersion, identity, schedule, reminderTime, windowStart, windowEnd, difficulty, groupId, sortOrder, archived, createdAt) VALUES ('habit-existing', 'Walk', '🚶', '#4CAF50', '', '', '', '', 'v1:DAILY', NULL, NULL, NULL, 'EASY', NULL, 0, 0, 1715000000000)"
+                "INSERT INTO habits (id, name, emoji, color, cue, fullVersion, minVersion, identity, schedule, windowStart, windowEnd, difficulty, groupId, sortOrder, archived, createdAt) VALUES ('habit-existing', 'Walk', '🚶', '#4CAF50', '', '', '', '', 'v1:DAILY', NULL, NULL, 'EASY', NULL, 0, 0, 1715000000000)"
             )
+            // Seed a completion before the single full-chain migration call. Completions first
+            // exist after 1->2; the migration uses IF NOT EXISTS, so it preserves this row.
+            AppDatabase.MIGRATION_1_2.migrate(this)
             execSQL(
                 "INSERT INTO completions (id, habitId, logicalDate, state, completedAt, reason, note) VALUES ('completion-existing', 'habit-existing', '2025-05-12', 'DONE', 1715000000000, NULL, NULL)"
             )
@@ -35,6 +38,8 @@ class RewardSchemaMigrationTest {
             TEST_DB,
             4,
             true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
             AppDatabase.MIGRATION_3_4
         )
         assertEquals("existing habit survives", 1, scalarInt(db, "SELECT COUNT(*) FROM habits WHERE id = 'habit-existing'"))
