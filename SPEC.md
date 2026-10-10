@@ -47,7 +47,7 @@ Cue fires (reminder or widget) -> user does the tiny action -> checks it off -> 
 - `DAILY`: repeat every day
 - `WEEKDAYS(set)`: chosen days of the week
 - `EVERY_N_DAYS(n)`: fixed anchor at the habit's start date
-- `N_PER_WEEK(n)`: available all week until `n` completions; its `n` occurrences resolve at week end (`min(c, n)` completions, `n - c` MISSED). Week start day is a global setting (default Monday). For a habit created mid-week, `n` is capped at the days remaining in that first week.
+- `N_PER_WEEK(n)`: available on any day of the week. Rewards are available for at most `n` distinct logical dates in the current week; the weekly window uses the global week-start setting (default Monday). In the habit's creation week, the effective target is `min(n, days remaining from its creation date through week end)`. Logging beyond the paid-date quota remains allowed, but earns no habit reward. Changing the week-start setting mid-week can shift the quota window.
 - `UNKNOWN`: habits with an unrecognized schedule version. Excluded from replay and scoring (displayed as "needs app update"). Unknown schedule strings are preserved on save.
 
 ### 4.3 Day boundary
@@ -56,13 +56,13 @@ A "day" ends at a user-configurable hour (default 04:00 local). All completions 
 ### 4.4 Completion states
 | State | Counts for consistency | Counts for streak | Seeds |
 |---|---|---|---|
-| DONE | 1.0 | yes | 100% |
-| MINIMUM | 0.7 | yes | 60% |
-| SKIPPED (planned) | excluded from denominator | neutral (no break, no length) | 0 |
+| DONE | 1.0 | yes | eligible for the full habit reward |
+| MINIMUM | 0.7 | yes | eligible for the minimum-stage reward |
+| SKIPPED | excluded from denominator | neutral (no break, no length) | 0 |
 | MISSED | 0 | see 5.2 | 0 |
 | PROTECTED (rest token used) | excluded | yes (preserved) | 0 |
 
-Only user-logged states (`DONE`, `MINIMUM`, `SKIPPED`) are persisted. `MISSED` and `PROTECTED` are derived on replay. Today's logical date is pending: NOT `MISSED` and NOT in the consistency denominator unless logged. Users can backfill the previous 7 days in the UI; future dates are blocked.
+Only user-logged states (`DONE`, `MINIMUM`, `SKIPPED`) are persisted. `MISSED` and `PROTECTED` are derived on replay. Today's logical date is pending: NOT `MISSED` and NOT in the consistency denominator unless logged. Users can backfill the previous 7 days in the UI; future dates are blocked. Logging is allowed on unscheduled days, but rewards are granted only for an eligible state on today's logical date when that date is scheduled. Backfills, unscheduled dates, unknown schedules, and dates beyond an `N_PER_WEEK` paid-date quota earn no rewards. Streak and consistency behavior is unchanged by reward eligibility.
 
 ## 5. Consistency instead of streaks
 
@@ -92,33 +92,43 @@ The first `DONE` or `MINIMUM` within 2 scheduled occurrences after a `MISSED` pa
 ## 6. Economy
 
 ### 6.1 Currencies
-- **Seeds**: spendable.
-- **XP**: drives level only (never spent).
+- **Seeds**: spendable; the balance is the sum of its append-only ledger rows.
+- **XP**: drives level only (never spent); total XP is the sum of its append-only ledger rows.
 
 ### 6.2 Earning (starting values)
+Habit rewards are granted only once per `(habitId, logicalDate, stage, currency)` idempotency key, up to the best stage reached that date. `MINIMUM` followed by `DONE` pays the difference between the saved stage entitlements; `DONE` followed by `MINIMUM` pays nothing. Unchecking never refunds Seeds, XP, or drops, and re-checking never pays twice. A `SKIPPED` completion can later become a first eligible `DONE` grant. Reward eligibility is evaluated on the first grant for that habit/date; later stage upgrades inherit that eligibility.
+
 ```
-habitSeeds = 10 * difficultyMultiplier * stateFactor + streakBonus
+baseSeeds = round half up(10 * difficultyMultiplier * stateFactor)
+habitSeeds entitlement = baseSeeds + min(streakLength, 10)
   difficultyMultiplier: EASY 1.0, MEDIUM 1.5, HARD 2.0
   stateFactor: DONE 1.0, MINIMUM 0.6
-  streakBonus: min(streakLength, 10)   // flat Seeds, DONE/MINIMUM only
-comebackBonus: +50% on that completion
-habitXp = 10 per DONE/MINIMUM
-focusSeeds = 1 per focused minute (sessions >= 5 min)
-focusXp = 1 per focused minute
+  streakLength: ReplayEngine streak including the completion being logged
+comeback: multiply that completion's Seeds entitlement by 1.5 when eligible
+habitXp entitlement = 10 per DONE/MINIMUM stage
 ```
 
+When comeback applies, round half up the Seeds entitlement after multiplying by 1.5.
+
+The first grant's difficulty, streak length, comeback flag, and stage entitlement amounts are saved on its ledger rows and reused for an upgrade. A later difficulty edit does not change earlier rewards. A `MINIMUM` to `DONE` upgrade is the first `DONE` grant for drop and pity purposes, but grants no additional XP. Habit rewards use an injected random source; production randomness is not seedable, while tests inject a seeded source.
+
+Only completions for today's logical date and a scheduled occurrence can earn rewards. `N_PER_WEEK(n)` rewards are available until `n` distinct logical dates in the current week have a first-grant Seeds ledger row for that habit. Zero-delta rows after the daily Seeds cap still count as paid dates. The date being logged is excluded from the quota check, so a stage upgrade inherits its first-grant eligibility. Backfilled dates earn nothing and do not count toward the weekly quota. Unknown schedules never earn rewards.
+
+No-reward outcomes are represented by reasons, not by reward copy: `NOT_SCHEDULED`, `BACKFILL`, `UNKNOWN_SCHEDULE`, `WEEKLY_GOAL_REACHED`, and `ALREADY_REWARDED`. An already-rewarded result has no message. If the daily Seeds cap reduces a grant to zero, XP and any eligible drop still apply; the UI may show a neutral daily-maximum notice. `SKIPPED` earns no reward.
+
 ### 6.3 Caps (anti-exploit)
-- Habit Seeds per logical day: 300.
-- Focus Seeds per logical day: 120. Focus XP per day: 120.
+- Habit Seeds per logical day: 300. The cap reduces a grant to the remaining room and never makes a grant negative. It sums positive habit-reward Seeds ledger deltas only; spending and other ledger reasons do not reduce or consume this cap.
+- Habit XP and drop rolls are uncapped per day in M5. Focus Seeds and XP caps are reserved for Focus mode (M8) and are not applied to habit rewards.
 - A focus session's duration is measured from monotonic time; sessions are rejected if the clock jumps.
 - Every currency change is an append-only ledger row (see 9).
 
 ### 6.4 Level curve
-`xpToNext(level) = 100 + 25 * (level - 1)`
+`xpToNext(level) = 100 + 25 * (level - 1)`. Level starts at 1 when total XP is 0 and is derived from the ledger's total XP.
 
 ### 6.5 Drops (variable reward)
-- 5% chance per DONE completion of a random item/character drop.
-- Pity: guaranteed drop after 30 completions without one.
+- 5% chance on the first `DONE` grant for each `(habitId, logicalDate)`; a `MINIMUM` to `DONE` upgrade is eligible. At most one `DropRecord` exists per habit/date. A drop record is written only when a drop occurs.
+- Pity is global. Its counter is the number of first-`DONE` grants since the last natural or pity drop. After 30 consecutive first-`DONE` grants without a drop, the 31st first-`DONE` grant is guaranteed to drop. At a counter of 30 or more, the chance roll is skipped and only the rarity roll is consumed. A drop resets the counter to zero. Minimum-only grants, backfills, ineligible completions, and repeats do not move pity.
+- Pity is derived from the counter on the latest first-`DONE` Seeds ledger row ordered by ledger id descending, not from mutable player state. Zero-delta Seeds rows carry the counter and participate in this lookup.
 - Rarity weights: common 70, uncommon 22, rare 7, legendary 1.
 
 ### 6.6 Sinks
@@ -206,8 +216,12 @@ Habit(id, name, emoji, color, cue, fullVersion, minVersion, identity,
 HabitGroup(id, name, sortOrder)
 Completion(id, habitId, logicalDate, state, completedAt, reason, note)
 RestToken(habitId, count, earnedProgress)
-LedgerEntry(id, currency, delta, reason, refId, createdAt)   // append-only; balance = sum
-PlayerState(level, xp, lastDropPity, settings...)
+LedgerEntry(id AUTOINCREMENT, currency, delta, reason, habitId?, logicalDate?, stage?,
+            idempotencyKey UNIQUE, createdAt, difficulty?, streakLength?, comebackApplied?,
+            stageEntitlementAmount?, pityCounterAfter?)                    // append-only
+DropRecord(id, rarity, habitId, logicalDate, createdAt)                   // unique habitId/date
+Settings(key, value)
+PlayerState(settings...)                                                  // no mutable balance, level, XP, or pity
 WorldItem(id, islandId, type, x, y, rotation, flipped)
 Island(id, width, height, terrain blob)
 Character(id, type, rarity, positionOrNull)
@@ -218,8 +232,13 @@ Settings(key, value)
 ```
 
 Rules:
-- Balances are derived from `LedgerEntry`, never stored as a mutable number.
+- Balances and total XP are derived from `LedgerEntry`, never stored as mutable numbers. Level is derived from total XP; pity is derived from the latest first-`DONE` Seeds ledger row by ledger id.
+- Ledger rows preserve the grant stage, idempotency key, saved stage entitlement, reward basis, and pity counter. No delete or update is used to change earned rewards.
+- Ledger indexes support cap reads by `(reason, currency, logicalDate)` and weekly quota reads by `(habitId, logicalDate)`.
+- A pre-M5 completion has no reward rows and earns nothing retroactively. If it is later logged as an eligible same-state completion with no ledger rows for that habit/date, it is treated as a first grant and paid once; this is a one-time migration-era artifact.
 - `Completion` has a unique constraint on (`habitId`, `logicalDate`).
+- `DropRecord` has a unique constraint on (`habitId`, `logicalDate`). Reward writes and the corresponding completion are one Room transaction.
+- `RoomRewardLedgerPort` is internal so its database adapter behavior can be tested without exposing it as public API.
 
 ## 10. Screens
 1. Onboarding (pick 1 to 3 starter habits, set cue and minimum, set reminder time)
@@ -250,7 +269,7 @@ Implementation stack note: WorkManager is not used yet; it will be added when a 
 
 **M4: Widget.** Today's list updates and completes in place.
 
-**M5: Economy.** Ledger, caps, drops with pity, level curve; tests for every formula in section 6.
+**M5: Economy.** Append-only reward ledger, habit Seeds cap, drops with pity, level curve, and minimal home UI showing Seeds, level, XP progress, and in-app reward feedback; tests for every formula in section 6.
 
 **M6: World spike.** Isometric grid with placeholder tiles holds 60 fps with 200 items on a mid-range device.
 
@@ -263,7 +282,11 @@ Implementation stack note: WorkManager is not used yet; it will be added when a 
 **M10 and later:** strict mode and app blocking, buddy quests, sync, Health Connect.
 
 ## 13. Risks
-- Economy balance and exploits (mitigate with caps, ledger, tests).
+- Economy balance and exploits. Habit XP and drop rolls are uncapped per day; many habits checked off in one day can inflate XP and drop count. Decide a per-day drop cap before M7, when drops become real items.
+- Reward integrity depends on the device clock; changing the system clock or timezone can mint extra logical days and daily caps. Accepted for an offline app without a server.
+- Changing the week-start setting mid-week can shift the weekly quota window and reopen quota. Editing a schedule to include today can make that occurrence reward-eligible.
+- Debug clock shifting can simulate additional logical days and rewards in debug builds; accepted as a v1 risk.
+- Pre-M5 completions have no ledger rewards; a same-state re-log with no reward rows can be paid as a first grant, as described in 9.
 - Notification fatigue (mitigate with caps and quiet hours).
 - Art scope creep (use placeholder art until M7 is stable).
 - Evidence for adaptive personalization is mixed, so keep those features optional helpers.
