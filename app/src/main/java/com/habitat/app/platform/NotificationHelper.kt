@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.habitat.app.MainActivity
 import com.habitat.app.R
@@ -19,6 +20,8 @@ import java.time.LocalDate
  * SPEC Section 8.1.
  */
 object NotificationHelper {
+
+    private const val TAG = "HabitatDebug"
 
     const val CHANNEL_ID = "habit_reminders"
     const val SUMMARY_TAG = "summary"
@@ -52,6 +55,7 @@ object NotificationHelper {
         logicalDate: LocalDate,
         snoozeMinutes: Int = 30
     ) {
+        Log.d(TAG, "Posting notification for habit=${habit.id} (${habit.name}), logicalDate=$logicalDate")
         createNotificationChannel(context)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -132,6 +136,7 @@ object NotificationHelper {
             .build()
 
         manager.notify(habit.id, HABIT_NOTIFICATION_ID, notification)
+        Log.d(TAG, "Notification posted successfully for habit=${habit.id}")
     }
 
     fun postSummaryNotification(
