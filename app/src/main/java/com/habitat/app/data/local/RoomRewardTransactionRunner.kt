@@ -79,16 +79,16 @@ internal class RoomRewardLedgerPort(private val dao: LedgerEntryDao) : RewardLed
     }
 
     override suspend fun sumPositiveHabitSeeds(logicalDate: LocalDate): Long =
-        dao.sumPositiveHabitSeeds(logicalDate)
+        dao.sumPositiveHabitSeeds(logicalDate, HABIT_REWARD_REASON)
 
     override suspend fun highestStage(habitId: String, logicalDate: LocalDate): RewardStage? =
-        dao.highestStageForHabitDate(habitId, logicalDate)?.let(RewardStage::valueOf)
+        dao.highestStageForHabitDate(habitId, logicalDate, HABIT_REWARD_REASON)?.let(RewardStage::valueOf)
 
     override suspend fun stageRowsForSavedBasis(habitId: String, logicalDate: LocalDate): List<RewardLedgerEntry> =
-        dao.stageRowsForSavedBasis(habitId, logicalDate).map(LedgerEntryEntity::toDomainModel)
+        dao.stageRowsForSavedBasis(habitId, logicalDate, HABIT_REWARD_REASON).map(LedgerEntryEntity::toDomainModel)
 
     override suspend fun latestFirstDoneRowForPity(): RewardLedgerEntry? =
-        dao.latestFirstDoneRowForPity()?.toDomainModel()
+        dao.latestFirstDoneRowForPity(HABIT_REWARD_REASON)?.toDomainModel()
 
     override suspend fun distinctPaidDatesInRangeExcludingDate(
         habitId: String,
@@ -99,13 +99,17 @@ internal class RoomRewardLedgerPort(private val dao: LedgerEntryDao) : RewardLed
         habitId = habitId,
         startDate = startDate,
         endDate = endDate,
-        excludedDate = excludedDate
+        excludedDate = excludedDate,
+        reason = HABIT_REWARD_REASON
     )
 
     override suspend fun balance(currency: RewardCurrency): Long = dao.balanceForCurrency(currency.name)
 
     override suspend fun totalXp(): Long = dao.totalXp()
 }
+
+private val HABIT_REWARD_REASON: String
+    get() = LedgerReasonDatabaseMapper.toDatabaseValue(LedgerReason.HABIT_REWARD)
 
 private fun SQLiteConstraintException.isIdempotencyKeyConflict(): Boolean {
     val reportedColumn = message.orEmpty().lowercase().replace("`", "")

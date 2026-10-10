@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.habitat.app.data.local.AppDatabase
 import com.habitat.app.data.local.DropRecordEntity
+import com.habitat.app.data.local.LedgerReasonDatabaseMapper
 import com.habitat.app.data.local.RoomRewardTransactionRunner
 import com.habitat.app.domain.RewardDropRecord
 import com.habitat.app.domain.RewardLedgerEntry
@@ -113,7 +114,11 @@ class RewardTransactionRollbackTest {
         assertNull("completion insert rolled back", database.completionDao().getCompletion(HABIT_ID, LOGICAL_DATE))
         assertTrue(
             "ledger insert rolled back",
-            database.ledgerEntryDao().stageRowsForSavedBasis(HABIT_ID, LOGICAL_DATE).isEmpty()
+            database.ledgerEntryDao().stageRowsForSavedBasis(
+                HABIT_ID,
+                LOGICAL_DATE,
+                LedgerReasonDatabaseMapper.toDatabaseValue(LedgerReason.HABIT_REWARD)
+            ).isEmpty()
         )
         database.openHelper.readableDatabase.query(
             "SELECT COUNT(*) FROM drop_records WHERE habitId = '$HABIT_ID' AND logicalDate = '$LOGICAL_DATE'"

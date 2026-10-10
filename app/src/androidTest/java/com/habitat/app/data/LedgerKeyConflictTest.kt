@@ -110,7 +110,7 @@ class LedgerKeyConflictTest {
         assertNull("completion written before conflict rolled back", database.completionDao().getCompletion(HABIT_ID, DAY))
         assertTrue(
             "ledger row written before conflict rolled back",
-            database.ledgerEntryDao().stageRowsForSavedBasis(HABIT_ID, DAY).isEmpty()
+            database.ledgerEntryDao().stageRowsForSavedBasis(HABIT_ID, DAY, rewardReason()).isEmpty()
         )
         database.openHelper.readableDatabase.query(
             "SELECT COUNT(*) FROM drop_records WHERE habitId = '$HABIT_ID' AND logicalDate = '$DAY'"
@@ -157,6 +157,9 @@ class LedgerKeyConflictTest {
         pityCounterAfter = 1
     )
 
+    private fun rewardReason() = com.habitat.app.data.local.LedgerReasonDatabaseMapper
+        .toDatabaseValue(LedgerReason.HABIT_REWARD)
+
     private fun dropRecord(id: String) = RewardDropRecord(
         id = id,
         rarity = DropRarity.COMMON,
@@ -189,19 +192,20 @@ private class FakeConflictingLedgerEntryDao(
     override suspend fun containsIdempotencyKey(idempotencyKey: String): Boolean =
         idempotencyKey in existingKeys
 
-    override suspend fun sumPositiveHabitSeeds(logicalDate: LocalDate): Long = 0
+    override suspend fun sumPositiveHabitSeeds(logicalDate: LocalDate, reason: String): Long = 0
 
-    override suspend fun highestStageForHabitDate(habitId: String, logicalDate: LocalDate): String? = null
+    override suspend fun highestStageForHabitDate(habitId: String, logicalDate: LocalDate, reason: String): String? = null
 
-    override suspend fun stageRowsForSavedBasis(habitId: String, logicalDate: LocalDate): List<LedgerEntryEntity> = emptyList()
+    override suspend fun stageRowsForSavedBasis(habitId: String, logicalDate: LocalDate, reason: String): List<LedgerEntryEntity> = emptyList()
 
-    override suspend fun latestFirstDoneRowForPity(): LedgerEntryEntity? = null
+    override suspend fun latestFirstDoneRowForPity(reason: String): LedgerEntryEntity? = null
 
     override suspend fun distinctPaidDatesForHabitInRangeExcludingDate(
         habitId: String,
         startDate: LocalDate,
         endDate: LocalDate,
-        excludedDate: LocalDate
+        excludedDate: LocalDate,
+        reason: String
     ): List<LocalDate> = emptyList()
 
     override suspend fun balanceForCurrency(currency: String): Long = 0

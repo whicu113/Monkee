@@ -6,6 +6,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.habitat.app.data.local.AppDatabase
 import com.habitat.app.data.local.LedgerEntryDao
 import com.habitat.app.data.local.LedgerEntryEntity
+import com.habitat.app.data.local.LedgerReasonDatabaseMapper
+import com.habitat.app.domain.LedgerReason
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -46,7 +48,7 @@ class LedgerEntryDaoTest {
         dao.insert(entry(currency = "XP", delta = 30, date = DAY, key = "xp"))
         dao.insert(entry(delta = 40, date = DAY.plusDays(1), key = "other-day"))
 
-        assertEquals("daily cap ignores negative, other-source, other-currency, and other-date rows", 20L, dao.sumPositiveHabitSeeds(DAY))
+        assertEquals("daily cap ignores negative, other-source, other-currency, and other-date rows", 20L, dao.sumPositiveHabitSeeds(DAY, rewardReason))
     }
 
     @Test
@@ -54,8 +56,8 @@ class LedgerEntryDaoTest {
         dao.insert(entry(stage = "MINIMUM", key = "minimum"))
         dao.insert(entry(stage = "DONE", key = "done"))
 
-        assertEquals("DONE outranks MINIMUM", "DONE", dao.highestStageForHabitDate(HABIT, DAY))
-        assertNull("no stage exists for another habit", dao.highestStageForHabitDate("other", DAY))
+        assertEquals("DONE outranks MINIMUM", "DONE", dao.highestStageForHabitDate(HABIT, DAY, rewardReason))
+        assertNull("no stage exists for another habit", dao.highestStageForHabitDate("other", DAY, rewardReason))
     }
 
     @Test
@@ -64,7 +66,7 @@ class LedgerEntryDaoTest {
         dao.insert(entry(currency = "XP", stage = "MINIMUM", difficulty = "HARD", streak = 4, comeback = true, entitlement = 10, key = "minimum-xp"))
         dao.insert(entry(stage = "DONE", difficulty = "HARD", streak = 4, comeback = true, entitlement = 30, key = "done-seeds"))
 
-        val rows = dao.stageRowsForSavedBasis(HABIT, DAY)
+        val rows = dao.stageRowsForSavedBasis(HABIT, DAY, rewardReason)
         assertEquals("saved basis returns each stage currency row", 3, rows.size)
         assertEquals("first row keeps saved difficulty", "HARD", rows.first().difficulty)
         assertEquals("first row keeps saved streak", 4, rows.first().streakLength)
@@ -83,7 +85,7 @@ class LedgerEntryDaoTest {
             entry(currency = "XP", delta = 0, stage = "DONE", date = DAY.plusDays(3), createdAt = 25, pity = 44, key = "later-xp")
         )
 
-        val row = dao.latestFirstDoneRowForPity()
+        val row = dao.latestFirstDoneRowForPity(rewardReason)
         assertNotNull("latest first-DONE row exists", row)
         assertEquals("pity ordering uses auto id rather than date or timestamp", latestId, row!!.id)
         assertNotEquals("later MINIMUM Seeds row must be ignored", laterMinimumSeedsId, row.id)
@@ -105,7 +107,23 @@ class LedgerEntryDaoTest {
         assertEquals(
             "weekly quota counts distinct first-grant dates and excludes current date",
             listOf(DAY.plusDays(1)),
-            dao.distinctPaidDatesForHabitInRangeExcludingDate(HABIT, DAY, DAY.plusDays(6), DAY)
+            dao.distinctPaidDatesForHabitInRangeExcludingDate(HABIT, DAY, DAY.plusDays(6), DAY, rewardReason)
+        )
+    }
+
+    @Test
+    fun mappedHabitRewardReasonIsAcceptedByEveryRewardFilter() = runBlocking {
+        val mappedReason = LedgerReasonDatabaseMapper.toDatabaseValue(LedgerReason.HABIT_REWARD)
+        val insertedId = dao.insert(entry(reason = mappedReason, key = "mapped-habit-reward"))
+
+        assertEquals("daily Seeds filter uses the mapped reward reason", 10L, dao.sumPositiveHabitSeeds(DAY, mappedReason))
+        assertEquals("highest stage filter uses the mapped reward reason", "DONE", dao.highestStageForHabitDate(HABIT, DAY, mappedReason))
+        assertEquals("saved basis filter uses the mapped reward reason", insertedId, dao.stageRowsForSavedBasis(HABIT, DAY, mappedReason).single().id)
+        assertEquals("pity filter uses the mapped reward reason", insertedId, dao.latestFirstDoneRowForPity(mappedReason)?.id)
+        assertEquals(
+            "weekly quota filter uses the mapped reward reason",
+            listOf(DAY),
+            dao.distinctPaidDatesForHabitInRangeExcludingDate(HABIT, DAY, DAY.plusDays(6), DAY.minusDays(1), mappedReason)
         )
     }
 
@@ -124,7 +142,7 @@ class LedgerEntryDaoTest {
     private fun entry(
         currency: String = "SEEDS",
         delta: Long = 10,
-        reason: String = "HABIT_REWARD",
+        reason: String = rewardReason,
         habitId: String = HABIT,
         date: LocalDate = DAY,
         createdAt: Long = 500,
@@ -150,6 +168,9 @@ class LedgerEntryDaoTest {
         stageEntitlementAmount = entitlement,
         pityCounterAfter = pity
     )
+
+    private val rewardReason: String
+        get() = LedgerReasonDatabaseMapper.toDatabaseValue(LedgerReason.HABIT_REWARD)
 
     private companion object {
         val DAY: LocalDate = LocalDate.parse("2025-05-12")

@@ -17,32 +17,32 @@ interface LedgerEntryDao {
 
     @Query(
         "SELECT COALESCE(SUM(delta), 0) FROM ledger_entries " +
-            "WHERE reason = 'HABIT_REWARD' AND currency = 'SEEDS' AND logicalDate = :logicalDate AND delta > 0"
+            "WHERE reason = :reason AND currency = 'SEEDS' AND logicalDate = :logicalDate AND delta > 0"
     )
-    suspend fun sumPositiveHabitSeeds(logicalDate: LocalDate): Long
+    suspend fun sumPositiveHabitSeeds(logicalDate: LocalDate, reason: String): Long
 
     @Query(
         "SELECT rewardStage FROM ledger_entries " +
-            "WHERE reason = 'HABIT_REWARD' AND currency = 'SEEDS' AND habitId = :habitId AND logicalDate = :logicalDate " +
+            "WHERE reason = :reason AND currency = 'SEEDS' AND habitId = :habitId AND logicalDate = :logicalDate " +
             "AND rewardStage IS NOT NULL " +
             "ORDER BY CASE rewardStage WHEN 'DONE' THEN 2 WHEN 'MINIMUM' THEN 1 ELSE 0 END DESC LIMIT 1"
     )
-    suspend fun highestStageForHabitDate(habitId: String, logicalDate: LocalDate): String?
+    suspend fun highestStageForHabitDate(habitId: String, logicalDate: LocalDate, reason: String): String?
 
     @Query(
-        "SELECT * FROM ledger_entries WHERE reason = 'HABIT_REWARD' AND habitId = :habitId " +
+        "SELECT * FROM ledger_entries WHERE reason = :reason AND habitId = :habitId " +
             "AND logicalDate = :logicalDate AND rewardStage IS NOT NULL ORDER BY id ASC"
     )
-    suspend fun stageRowsForSavedBasis(habitId: String, logicalDate: LocalDate): List<LedgerEntryEntity>
+    suspend fun stageRowsForSavedBasis(habitId: String, logicalDate: LocalDate, reason: String): List<LedgerEntryEntity>
 
     @Query(
-        "SELECT * FROM ledger_entries WHERE reason = 'HABIT_REWARD' AND currency = 'SEEDS' " +
+        "SELECT * FROM ledger_entries WHERE reason = :reason AND currency = 'SEEDS' " +
             "AND rewardStage = 'DONE' ORDER BY id DESC LIMIT 1"
     )
-    suspend fun latestFirstDoneRowForPity(): LedgerEntryEntity?
+    suspend fun latestFirstDoneRowForPity(reason: String): LedgerEntryEntity?
 
     @Query(
-        "SELECT DISTINCT logicalDate FROM ledger_entries WHERE reason = 'HABIT_REWARD' AND currency = 'SEEDS' " +
+        "SELECT DISTINCT logicalDate FROM ledger_entries WHERE reason = :reason AND currency = 'SEEDS' " +
             "AND habitId = :habitId AND logicalDate BETWEEN :startDate AND :endDate " +
             "AND logicalDate != :excludedDate AND rewardStage IN ('MINIMUM', 'DONE') ORDER BY logicalDate ASC"
     )
@@ -50,7 +50,8 @@ interface LedgerEntryDao {
         habitId: String,
         startDate: LocalDate,
         endDate: LocalDate,
-        excludedDate: LocalDate
+        excludedDate: LocalDate,
+        reason: String
     ): List<LocalDate>
 
     @Query("SELECT COALESCE(SUM(delta), 0) FROM ledger_entries WHERE currency = :currency")
