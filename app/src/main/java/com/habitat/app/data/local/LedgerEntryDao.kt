@@ -12,6 +12,9 @@ interface LedgerEntryDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entry: LedgerEntryEntity): Long
 
+    @Query("SELECT EXISTS(SELECT 1 FROM ledger_entries WHERE idempotencyKey = :idempotencyKey)")
+    suspend fun containsIdempotencyKey(idempotencyKey: String): Boolean
+
     @Query(
         "SELECT COALESCE(SUM(delta), 0) FROM ledger_entries " +
             "WHERE reason = 'HABIT_REWARD' AND currency = 'SEEDS' AND logicalDate = :logicalDate AND delta > 0"

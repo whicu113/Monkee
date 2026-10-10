@@ -68,11 +68,11 @@ private class RoomRewardCompletionPort(private val dao: CompletionDao) : RewardC
     }
 }
 
-private class RoomRewardLedgerPort(private val dao: LedgerEntryDao) : RewardLedgerTransactionPort {
+internal class RoomRewardLedgerPort(private val dao: LedgerEntryDao) : RewardLedgerTransactionPort {
     override suspend fun insert(entry: RewardLedgerEntry): Long = try {
         dao.insert(entry.toEntity())
     } catch (failure: SQLiteConstraintException) {
-        if (failure.isIdempotencyKeyConflict()) {
+        if (failure.isIdempotencyKeyConflict() || dao.containsIdempotencyKey(entry.idempotencyKey)) {
             throw LedgerKeyConflictException(entry.idempotencyKey, failure)
         }
         throw failure

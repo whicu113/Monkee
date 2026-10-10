@@ -6,6 +6,9 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.habitat.app.data.local.AppDatabase
 import com.habitat.app.data.local.DropRecordEntity
+import com.habitat.app.data.local.LedgerEntryDao
+import com.habitat.app.data.local.LedgerEntryEntity
+import com.habitat.app.data.local.RoomRewardLedgerPort
 import com.habitat.app.data.local.RoomRewardTransactionRunner
 import com.habitat.app.domain.LedgerKeyConflictException
 import com.habitat.app.domain.LedgerReason
@@ -117,6 +120,27 @@ class LedgerKeyConflictTest {
         }
     }
 
+    @Test
+    fun unrecognizedConstraintWithExistingIdempotencyKeyBecomesDomainConflict() = runBlocking {
+        val entry = rewardEntry()
+        val port = RoomRewardLedgerPort(
+            FakeConflictingLedgerEntryDao(
+                failure = SQLiteConstraintException("synthetic unrecognized constraint"),
+                existingKeys = setOf(entry.idempotencyKey)
+            )
+        )
+        var conflict: LedgerKeyConflictException? = null
+
+        try {
+            port.insert(entry)
+        } catch (failure: LedgerKeyConflictException) {
+            conflict = failure
+        }
+
+        assertNotNull("existing idempotency key decides despite an unrecognized message", conflict)
+        assertEquals("translated exception preserves the key", entry.idempotencyKey, conflict?.idempotencyKey)
+    }
+
     private fun rewardEntry() = RewardLedgerEntry(
         currency = RewardCurrency.SEEDS,
         delta = 10,
@@ -154,4 +178,33 @@ class LedgerKeyConflictTest {
         val DAY: LocalDate = LocalDate.parse("2025-05-12")
         val NOW: Instant = Instant.parse("2025-05-12T12:00:00Z")
     }
+}
+
+private class FakeConflictingLedgerEntryDao(
+    private val failure: SQLiteConstraintException,
+    private val existingKeys: Set<String>
+) : LedgerEntryDao {
+    override suspend fun insert(entry: LedgerEntryEntity): Long = throw failure
+
+    override suspend fun containsIdempotencyKey(idempotencyKey: String): Boolean =
+        idempotencyKey in existingKeys
+
+    override suspend fun sumPositiveHabitSeeds(logicalDate: LocalDate): Long = 0
+
+    override suspend fun highestStageForHabitDate(habitId: String, logicalDate: LocalDate): String? = null
+
+    override suspend fun stageRowsForSavedBasis(habitId: String, logicalDate: LocalDate): List<LedgerEntryEntity> = emptyList()
+
+    override suspend fun latestFirstDoneRowForPity(): LedgerEntryEntity? = null
+
+    override suspend fun distinctPaidDatesForHabitInRangeExcludingDate(
+        habitId: String,
+        startDate: LocalDate,
+        endDate: LocalDate,
+        excludedDate: LocalDate
+    ): List<LocalDate> = emptyList()
+
+    override suspend fun balanceForCurrency(currency: String): Long = 0
+
+    override suspend fun totalXp(): Long = 0
 }
