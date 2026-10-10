@@ -25,4 +25,12 @@ object WidgetProgressRingMapper {
         val clamped = fraction.coerceIn(0f, 1f)
         return (clamped * 10f).roundToInt().coerceIn(0, 10)
     }
+
+    /** Returns null for states that use the neutral ring instead of a progress ring. */
+    fun ringIndex(state: WidgetDisplayState): Int? = when (state) {
+        is WidgetDisplayState.Habits -> progressRingIndex(state.progressFraction)
+        WidgetDisplayState.NoHabits,
+        WidgetDisplayState.NothingDueToday,
+        WidgetDisplayState.AllSkipped -> null
+    }
 }

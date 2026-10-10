@@ -38,7 +38,9 @@ import com.habitat.app.R
 import com.habitat.app.domain.logic.WidgetDisplayState
 import com.habitat.app.domain.logic.WidgetHabitRow
 import com.habitat.app.domain.logic.WidgetProgressRingMapper
+import com.habitat.app.domain.logic.WidgetRowActionState
 import com.habitat.app.domain.logic.WidgetStateBuilder
+import com.habitat.app.domain.logic.rowActions
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -132,7 +134,7 @@ private fun HabitsCard(
     compact: Boolean,
     modifier: GlanceModifier
 ) {
-    val ringIndex = WidgetProgressRingMapper.progressRingIndex(state.progressFraction)
+    val ringIndex = requireNotNull(WidgetProgressRingMapper.ringIndex(state))
     val ringDescription = "Today's progress: ${state.completedCount} of ${state.totalDueCount} done"
     val visibleRows = if (compact) state.rows.take(1) else state.rows
     val moreCount = state.remainingCount + (state.rows.size - visibleRows.size)
@@ -165,7 +167,7 @@ private fun HabitsCard(
                 }
             }
             visibleRows.firstOrNull()?.let { row ->
-                CompactActions(row)
+                CompactHabitEntry(row)
             }
         } else {
             Row(
@@ -229,9 +231,30 @@ private fun CompactActions(row: WidgetHabitRow) {
         horizontalAlignment = Alignment.Horizontal.CenterHorizontally,
         verticalAlignment = Alignment.Vertical.CenterVertically
     ) {
-        VisualAction("Done", "Mark ${row.name} done")
+        VisualAction("Done", "Mark ${row.name} as Done")
         Spacer(GlanceModifier.width(8.dp))
-        VisualAction("Minimum", "Mark ${row.name} minimum")
+        VisualAction("Minimum", "Mark ${row.name} as Minimum")
+    }
+}
+
+@androidx.glance.GlanceComposable
+@androidx.compose.runtime.Composable
+private fun CompactHabitEntry(row: WidgetHabitRow) {
+    when (rowActions(row.completionState)) {
+        WidgetRowActionState.SHOW_BUTTONS -> CompactActions(row)
+        else -> Row(
+            modifier = GlanceModifier.fillMaxWidth().height(48.dp),
+            horizontalAlignment = Alignment.Horizontal.CenterHorizontally,
+            verticalAlignment = Alignment.Vertical.CenterVertically
+        ) {
+            Text(
+                text = "✓ ${rowStateLabel(row.completionState)}",
+                modifier = GlanceModifier.semantics {
+                    contentDescription = habitStateDescription(row)
+                },
+                style = primaryStyle(14)
+            )
+        }
     }
 }
 
@@ -242,16 +265,28 @@ private fun HabitRow(row: WidgetHabitRow) {
         modifier = GlanceModifier.fillMaxWidth().height(48.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically
     ) {
-        Text(
-            text = "${row.emoji} ${row.name}",
-            modifier = GlanceModifier.defaultWeight().semantics {
-                contentDescription = habitStateDescription(row)
-            },
-            style = primaryStyle(14)
-        )
-        VisualAction("Done", "Mark ${row.name} done")
-        Spacer(GlanceModifier.width(4.dp))
-        VisualAction("Minimum", "Mark ${row.name} minimum")
+        when (rowActions(row.completionState)) {
+            WidgetRowActionState.SHOW_BUTTONS -> {
+                Text(
+                    text = "${row.emoji} ${row.name}",
+                    modifier = GlanceModifier.defaultWeight().semantics {
+                        contentDescription = row.name
+                    },
+                    style = primaryStyle(14)
+                )
+                VisualAction("Done", "Mark ${row.name} as Done")
+                Spacer(GlanceModifier.width(4.dp))
+                VisualAction("Minimum", "Mark ${row.name} as Minimum")
+            }
+
+            else -> Text(
+                text = "✓ ${row.emoji} ${row.name} · ${rowStateLabel(row.completionState)}",
+                modifier = GlanceModifier.defaultWeight().semantics {
+                    contentDescription = habitStateDescription(row)
+                },
+                style = primaryStyle(14)
+            )
+        }
     }
 }
 
@@ -341,10 +376,18 @@ private fun secondaryStyle(sizeSp: Int) = TextStyle(
     fontSize = sizeSp.sp
 )
 
+private fun rowStateLabel(completionState: com.habitat.app.domain.model.CompletionState?): String =
+    when (completionState) {
+        null -> ""
+        com.habitat.app.domain.model.CompletionState.DONE -> "Done"
+        com.habitat.app.domain.model.CompletionState.MINIMUM -> "Minimum"
+        com.habitat.app.domain.model.CompletionState.SKIPPED -> "Skipped"
+    }
+
 private fun habitStateDescription(row: WidgetHabitRow): String = when (row.completionState) {
-    null -> "${row.name}, not completed"
+    null -> row.name
     com.habitat.app.domain.model.CompletionState.DONE -> "${row.name}, done"
-    com.habitat.app.domain.model.CompletionState.MINIMUM -> "${row.name}, minimum completed"
+    com.habitat.app.domain.model.CompletionState.MINIMUM -> "${row.name}, minimum"
     com.habitat.app.domain.model.CompletionState.SKIPPED -> "${row.name}, skipped"
 }
 
