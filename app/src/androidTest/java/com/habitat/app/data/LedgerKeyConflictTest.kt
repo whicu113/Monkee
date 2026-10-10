@@ -22,6 +22,8 @@ import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.model.Difficulty
 import com.habitat.app.domain.model.LoggedCompletion
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -210,5 +212,9 @@ private class FakeConflictingLedgerEntryDao(
 
     override suspend fun balanceForCurrency(currency: String): Long = 0
 
+    override fun observeBalanceForCurrency(currency: String): Flow<Long> = flowOf(0L)
+
     override suspend fun totalXp(): Long = 0
+
+    override fun observeTotalXp(): Flow<Long> = flowOf(0L)
 }
