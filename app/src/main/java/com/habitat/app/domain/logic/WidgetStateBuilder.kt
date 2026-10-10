@@ -1,38 +1,42 @@
 package com.habitat.app.domain.logic
 
+import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.model.AppSettings
 import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.model.LoggedCompletion
 import com.habitat.app.domain.model.ScheduleType
-import java.time.LocalDate
 
 /**
  * Widget row for a single habit shown in the Glance widget.
  *
- * @param habitId   Stable identifier for tap actions.
- * @param name      Display name.
- * @param emoji     Emoji icon.
- * @param isCompleted True if DONE or MINIMUM logged today.
- * @param isSkipped   True if SKIPPED logged today.
+ * @param habitId         Stable identifier for tap actions.
+ * @param name            Display name.
+ * @param emoji           Emoji icon.
+ * @param completionState The completion state logged today (DONE, MINIMUM, SKIPPED), or null if pending.
  */
 data class WidgetHabitRow(
     val habitId: String,
     val name: String,
     val emoji: String,
-    val isCompleted: Boolean,
+    val completionState: CompletionState? = null
+) {
+    val isCompleted: Boolean
+        get() = completionState == CompletionState.DONE || completionState == CompletionState.MINIMUM
+
     val isSkipped: Boolean
-)
+        get() = completionState == CompletionState.SKIPPED
+}
 
 /**
  * Sealed display state returned by [WidgetStateBuilder.build].
  * SPEC Section 8.7.
  */
 sealed class WidgetDisplayState {
-    /** No habits exist in the repository. */
+    /** No active habits exist in the repository (empty, all archived, or all Unknown). */
     object NoHabits : WidgetDisplayState()
 
-    /** Habits exist but none are due today (all excluded by schedule, quota, archive, or Unknown). */
+    /** Active habits exist but none are due today (all excluded by schedule or quota). */
     object NothingDueToday : WidgetDisplayState()
 
     /**
@@ -69,80 +73,81 @@ sealed class WidgetDisplayState {
  * Pure-Kotlin builder that converts raw domain data into a [WidgetDisplayState].
  *
  * Rules (SPEC 8.7):
- * - Archived habits and Unknown schedules are excluded entirely.
- * - A habit is **due** if it is scheduled today (via [ScheduleEvaluator.isDueOn]) AND, for
- *   NPerWeek, the weekly quota has not yet been met (via [ScheduleEvaluator.isWeeklyQuotaMet]).
- *   Non-NPerWeek habits that are scheduled today are always due.
+ * - Archived habits and Unknown schedules are excluded entirely; if no active habits remain,
+ *   returns [WidgetDisplayState.NoHabits].
+ * - "Today" is derived directly from [clock.logicalDate(settings.dayBoundaryHour)].
+ * - A habit is **due** if it is scheduled today ([ScheduleEvaluator.isScheduledOn]) AND its weekly quota
+ *   has not yet been met (![ScheduleEvaluator.isWeeklyQuotaMet]). Non-NPerWeek habits scheduled today are always due.
  * - Due habits stay in rows even after they are completed or skipped.
+ * - Rows are ordered matching the app list: by group ([Habit.groupId] nulls-first), then by [Habit.sortOrder].
+ * - Rows are capped at [WidgetDisplayState.ROW_CAP]; excess is reported as remainingCount.
  * - SKIPPED habits are NOT counted in [WidgetDisplayState.Habits.totalDueCount] or
  *   [WidgetDisplayState.Habits.completedCount] so they don't inflate the denominator.
- * - Rows are capped at [WidgetDisplayState.ROW_CAP]; excess is reported as remainingCount.
- * - The builder is stateless and has no Android imports; it accepts a pre-computed logical date
- *   from the caller (who obtains it via [com.habitat.app.domain.AppClock.logicalDate]).
+ * - The builder is pure Kotlin with no Android dependencies.
  */
 object WidgetStateBuilder {
 
     /**
-     * @param today       Logical date from the injected clock (04:00 boundary already applied).
-     * @param habits      All active and archived habits from the repository.
-     * @param completions All logged completions (any date, any habit).
-     * @param settings    App settings containing [AppSettings.startOfWeekDay].
+     * @param clock       Injected clock to derive the logical date via [AppClock.logicalDate].
+     * @param habits      All habits from the repository.
+     * @param completions All logged completions.
+     * @param settings    App settings containing [AppSettings.dayBoundaryHour] and [AppSettings.startOfWeekDay].
      */
     fun build(
-        today: LocalDate,
+        clock: AppClock,
         habits: List<Habit>,
         completions: List<LoggedCompletion>,
         settings: AppSettings
     ): WidgetDisplayState {
-        // Filter out archived and Unknown schedules
         val activeHabits = habits.filter { !it.archived && it.schedule !is ScheduleType.Unknown }
-
         if (activeHabits.isEmpty()) {
-            return if (habits.isEmpty()) WidgetDisplayState.NoHabits
-            else WidgetDisplayState.NothingDueToday
+            return WidgetDisplayState.NoHabits
         }
 
-        // Pre-index completions by habitId for O(1) lookup
+        val today = clock.logicalDate(settings.dayBoundaryHour)
         val completionsByHabit = completions.groupBy { it.habitId }
 
-        // Determine which habits are due today
         val dueHabits = activeHabits.filter { habit ->
             val habitCompletions = completionsByHabit[habit.id] ?: emptyList()
-            val completionsThisWeek = weeklyDoneMinimumCount(
-                habitCompletions, today, settings
-            )
-            ScheduleEvaluator.isDueOn(habit.schedule, today, completionsThisWeek)
+            ScheduleEvaluator.isScheduledOn(habit.schedule, today) &&
+                !ScheduleEvaluator.isWeeklyQuotaMet(
+                    schedule = habit.schedule,
+                    date = today,
+                    startOfWeekDay = settings.startOfWeekDay,
+                    completions = habitCompletions
+                )
         }
 
         if (dueHabits.isEmpty()) return WidgetDisplayState.NothingDueToday
 
-        // Build rows; due habits stay even when completed or skipped
-        val rows = dueHabits.take(WidgetDisplayState.ROW_CAP).map { habit ->
+        val sortedDueHabits = dueHabits.sortedWith(
+            compareBy<Habit> { it.groupId ?: "" }
+                .thenBy { it.sortOrder }
+        )
+
+        val rows = sortedDueHabits.take(WidgetDisplayState.ROW_CAP).map { habit ->
             val todayComp = completionsByHabit[habit.id]
                 ?.firstOrNull { it.logicalDate == today }
             WidgetHabitRow(
                 habitId = habit.id,
                 name = habit.name,
                 emoji = habit.emoji,
-                isCompleted = todayComp?.state == CompletionState.DONE ||
-                    todayComp?.state == CompletionState.MINIMUM,
-                isSkipped = todayComp?.state == CompletionState.SKIPPED
+                completionState = todayComp?.state
             )
         }
-        val remainingCount = (dueHabits.size - WidgetDisplayState.ROW_CAP).coerceAtLeast(0)
+        val remainingCount = (sortedDueHabits.size - WidgetDisplayState.ROW_CAP).coerceAtLeast(0)
 
-        // totalDueCount and completedCount exclude SKIPPED
-        val completedCount = dueHabits.count { habit ->
-            val todayComp = completionsByHabit[habit.id]
-                ?.firstOrNull { it.logicalDate == today }
-            todayComp?.state == CompletionState.DONE || todayComp?.state == CompletionState.MINIMUM
+        val completedCount = sortedDueHabits.count { habit ->
+            val state = completionsByHabit[habit.id]
+                ?.firstOrNull { it.logicalDate == today }?.state
+            state == CompletionState.DONE || state == CompletionState.MINIMUM
         }
-        val skippedCount = dueHabits.count { habit ->
+        val skippedCount = sortedDueHabits.count { habit ->
             completionsByHabit[habit.id]
                 ?.firstOrNull { it.logicalDate == today }?.state == CompletionState.SKIPPED
         }
-        val totalDueCount = dueHabits.size - skippedCount
-        val allSkipped = skippedCount == dueHabits.size
+        val totalDueCount = sortedDueHabits.size - skippedCount
+        val allSkipped = skippedCount == sortedDueHabits.size
 
         if (allSkipped) return WidgetDisplayState.AllSkipped
 
@@ -157,22 +162,5 @@ object WidgetStateBuilder {
             progressFraction = progressFraction,
             allCompleted = allCompleted
         )
-    }
-
-    /**
-     * Counts DONE + MINIMUM completions for [habit] within the current week
-     * (needed to pass into [ScheduleEvaluator.isDueOn] for NPerWeek habits).
-     */
-    private fun weeklyDoneMinimumCount(
-        habitCompletions: List<LoggedCompletion>,
-        today: LocalDate,
-        settings: AppSettings
-    ): Int {
-        val weekStart = ScheduleEvaluator.startOfWeek(today, settings.startOfWeekDay)
-        val weekEnd = weekStart.plusDays(6)
-        return habitCompletions.count { comp ->
-            comp.logicalDate in weekStart..weekEnd &&
-                (comp.state == CompletionState.DONE || comp.state == CompletionState.MINIMUM)
-        }
     }
 }
