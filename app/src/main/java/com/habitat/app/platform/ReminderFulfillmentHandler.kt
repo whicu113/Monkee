@@ -7,7 +7,6 @@ import com.habitat.app.domain.logic.DropReason
 import com.habitat.app.domain.logic.FireDecision
 import com.habitat.app.domain.logic.ReminderEngine
 import com.habitat.app.domain.logic.ScheduleEvaluator
-import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.model.ScheduleType
 import com.habitat.app.domain.repository.CompletionRepository
@@ -76,17 +75,12 @@ class ReminderFulfillmentHandler @Inject constructor(
         val isLoggedToday = completions.any { it.logicalDate == today }
         val postedIds = settingsRepository.getPostedHabitIds(today.toString())
 
-        val isWeeklyQuotaMet = if (habit.schedule is ScheduleType.NPerWeek) {
-            val weekStart = ScheduleEvaluator.startOfWeek(today, settings.startOfWeekDay)
-            val weekEnd = weekStart.plusDays(6)
-            val completionsThisWeek = completions.count { comp ->
-                comp.logicalDate in weekStart..weekEnd &&
-                        (comp.state == CompletionState.DONE || comp.state == CompletionState.MINIMUM)
-            }
-            !ScheduleEvaluator.isDueOn(habit.schedule, today, completionsThisWeek)
-        } else {
-            false
-        }
+        val isWeeklyQuotaMet = ScheduleEvaluator.isWeeklyQuotaMet(
+            schedule = habit.schedule,
+            date = today,
+            startOfWeekDay = settings.startOfWeekDay,
+            completions = completions
+        )
 
         val scheduledTime = habit.reminderTime ?: clock.zonedDateTime().toLocalTime()
         val scheduledInstant = LocalDateTime.of(today, scheduledTime).atZone(clock.zoneId()).toInstant()

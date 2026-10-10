@@ -1,6 +1,8 @@
 package com.habitat.app.domain
 
 import com.habitat.app.domain.logic.ScheduleEvaluator
+import com.habitat.app.domain.model.CompletionState
+import com.habitat.app.domain.model.LoggedCompletion
 import com.habitat.app.domain.model.ScheduleType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -119,5 +121,132 @@ class ScheduleEvaluatorTest {
             override fun zoneId() = berlinZone
         }
         assertEquals(LocalDate.of(2025, 10, 25), fallClock0330.logicalDate(4))
+    }
+
+    // ─── isWeeklyQuotaMet tests ───────────────────────────────────────────────
+
+    private val monday = LocalDate.of(2025, 5, 12)  // Monday
+    private val tuesday = LocalDate.of(2025, 5, 13)
+    private val sunday = LocalDate.of(2025, 5, 11)  // Sunday (preceding week end for Mon-start)
+
+    /** Convenience builder for LoggedCompletion. */
+    private fun comp(habitId: String = "h1", date: LocalDate, state: CompletionState) =
+        LoggedCompletion(habitId = habitId, logicalDate = date, state = state)
+
+    @Test
+    fun `isWeeklyQuotaMet returns false for non-NPerWeek schedule`() {
+        assertFalse(
+            ScheduleEvaluator.isWeeklyQuotaMet(
+                schedule = ScheduleType.Daily,
+                date = monday,
+                startOfWeekDay = DayOfWeek.MONDAY,
+                completions = listOf(comp(date = monday, state = CompletionState.DONE))
+            )
+        )
+    }
+
+    @Test
+    fun `isWeeklyQuotaMet false when no completions this week`() {
+        assertFalse(
+            ScheduleEvaluator.isWeeklyQuotaMet(
+                schedule = ScheduleType.NPerWeek(n = 3),
+                date = monday,
+                startOfWeekDay = DayOfWeek.MONDAY,
+                completions = emptyList()
+            )
+        )
+    }
+
+    @Test
+    fun `isWeeklyQuotaMet false when under quota with DONE completions`() {
+        assertFalse(
+            ScheduleEvaluator.isWeeklyQuotaMet(
+                schedule = ScheduleType.NPerWeek(n = 3),
+                date = tuesday,
+                startOfWeekDay = DayOfWeek.MONDAY,
+                completions = listOf(
+                    comp(date = monday, state = CompletionState.DONE),
+                    comp(date = tuesday, state = CompletionState.DONE)
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `isWeeklyQuotaMet true when quota met with DONE completions`() {
+        assertTrue(
+            ScheduleEvaluator.isWeeklyQuotaMet(
+                schedule = ScheduleType.NPerWeek(n = 3),
+                date = LocalDate.of(2025, 5, 14),
+                startOfWeekDay = DayOfWeek.MONDAY,
+                completions = listOf(
+                    comp(date = monday, state = CompletionState.DONE),
+                    comp(date = tuesday, state = CompletionState.DONE),
+                    comp(date = LocalDate.of(2025, 5, 14), state = CompletionState.DONE)
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `isWeeklyQuotaMet MINIMUM counts toward quota`() {
+        assertTrue(
+            ScheduleEvaluator.isWeeklyQuotaMet(
+                schedule = ScheduleType.NPerWeek(n = 2),
+                date = tuesday,
+                startOfWeekDay = DayOfWeek.MONDAY,
+                completions = listOf(
+                    comp(date = monday, state = CompletionState.MINIMUM),
+                    comp(date = tuesday, state = CompletionState.MINIMUM)
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `isWeeklyQuotaMet SKIPPED does not count toward quota`() {
+        // 2 DONE + 1 SKIPPED for n=3: quota NOT met because SKIPPED doesn't count
+        assertFalse(
+            ScheduleEvaluator.isWeeklyQuotaMet(
+                schedule = ScheduleType.NPerWeek(n = 3),
+                date = LocalDate.of(2025, 5, 14),
+                startOfWeekDay = DayOfWeek.MONDAY,
+                completions = listOf(
+                    comp(date = monday, state = CompletionState.DONE),
+                    comp(date = tuesday, state = CompletionState.DONE),
+                    comp(date = LocalDate.of(2025, 5, 14), state = CompletionState.SKIPPED)
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `isWeeklyQuotaMet Monday-start week boundary excludes previous week completions`() {
+        // Completion from previous Sunday is outside the Mon-start week containing monday(May 12)
+        assertFalse(
+            ScheduleEvaluator.isWeeklyQuotaMet(
+                schedule = ScheduleType.NPerWeek(n = 1),
+                date = monday,
+                startOfWeekDay = DayOfWeek.MONDAY,
+                completions = listOf(
+                    comp(date = sunday, state = CompletionState.DONE) // May 11 = prev week
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `isWeeklyQuotaMet Sunday-start week includes Sunday completion`() {
+        // With Sunday start, May 11 IS in the same week as May 12
+        assertTrue(
+            ScheduleEvaluator.isWeeklyQuotaMet(
+                schedule = ScheduleType.NPerWeek(n = 1),
+                date = monday,
+                startOfWeekDay = DayOfWeek.SUNDAY,
+                completions = listOf(
+                    comp(date = sunday, state = CompletionState.DONE) // May 11 = same week
+                )
+            )
+        )
     }
 }
