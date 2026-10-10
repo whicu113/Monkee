@@ -130,9 +130,9 @@ class HabitRewardCalculatorTest {
         )
         val rows = listOf(
             Row("counter 29 still rolls normally", 29, listOf(99), null, 30),
-            Row("counter 30 guarantees the next drop", 30, listOf(0), DropRarity.COMMON, 0),
-            Row("natural drop resets the counter", 8, listOf(0, 0), DropRarity.COMMON, 0),
-            Row("pity drop resets the counter", 30, listOf(0), DropRarity.COMMON, 0)
+            Row("counter 29 chance hit resets the counter", 29, listOf(0, 0), DropRarity.COMMON, 0),
+            Row("counter 30 all misses guarantees legendary", 30, listOf(99, 99), DropRarity.LEGENDARY, 0),
+            Row("counter 45 all misses guarantees legendary", 45, listOf(99, 99), DropRarity.LEGENDARY, 0)
         )
 
         rows.forEach { row ->
@@ -162,6 +162,8 @@ class HabitRewardCalculatorTest {
             mapOf(RewardStage.DONE to done.grantedAmounts!!), done.seedsGranted,
             FixedRewardRandom(0, 0), done.pityCounterAfter
         )
+        assertEquals("repeat row: no second Seeds", 0, repeat.seedsGranted)
+        assertEquals("repeat row: no second XP", 0, repeat.xpGranted)
         assertEquals("repeat row: no second counter movement", done.pityCounterAfter, repeat.pityCounterAfter)
         assertEquals("repeat row: no second drop", null, repeat.drop)
     }
