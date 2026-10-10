@@ -19,7 +19,9 @@ import com.habitat.app.domain.model.OccurrenceState
 import com.habitat.app.domain.model.ScheduleType
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
+import com.habitat.app.domain.repository.PlayerEconomyRepository
 import com.habitat.app.domain.repository.SettingsRepository
+import com.habitat.app.domain.playerXpProgress
 import com.habitat.app.domain.usecase.LogCompletionUseCase
 import com.habitat.app.platform.NotificationHelper
 import com.habitat.app.platform.ReminderScheduler
@@ -28,10 +30,12 @@ import com.habitat.app.platform.ReminderFulfillmentHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -55,7 +59,20 @@ data class HabitListUiState(
     val debugShiftedDays: Long = 0,
     val debugShiftedHours: Long = 0,
     val quietHoursEnabled: Boolean = true,
-    val debugFireResult: String? = null
+    val debugFireResult: String? = null,
+    val seedsBalance: Long = 0L,
+    val level: Long = 1L,
+    val xpIntoLevel: Long = 0L,
+    val xpRequiredForNextLevel: Long = 100L,
+    val xpProgressFraction: Float = 0f
+)
+
+private data class HabitEconomyUiState(
+    val seedsBalance: Long,
+    val xpIntoLevel: Long,
+    val level: Long,
+    val xpRequiredForNextLevel: Long,
+    val xpProgressFraction: Float
 )
 
 @HiltViewModel
@@ -67,13 +84,14 @@ class HabitViewModel @Inject constructor(
     private val logCompletionUseCase: LogCompletionUseCase,
     private val reminderFulfillmentHandler: ReminderFulfillmentHandler,
     private val clock: AppClock,
-    private val widgetUpdater: WidgetUpdater
+    private val widgetUpdater: WidgetUpdater,
+    private val playerEconomyRepository: PlayerEconomyRepository = EmptyPlayerEconomyRepository
 ) : ViewModel() {
 
     private val selectedDateFlow = MutableStateFlow<LocalDate?>(null)
     private val debugFireResultFlow = MutableStateFlow<String?>(null)
 
-    val uiState: StateFlow<HabitListUiState> = combine(
+    private val habitUiState: Flow<HabitListUiState> = combine(
         habitRepository.getActiveHabits(),
         completionRepository.getAllCompletions(),
         settingsRepository.getSettings(),
@@ -140,6 +158,30 @@ class HabitViewModel @Inject constructor(
             availableDates = availableDates,
             quietHoursEnabled = settings.quietHoursEnabled,
             debugFireResult = fireResult
+        )
+    }
+
+    private val economyUiState = combine(
+        playerEconomyRepository.observeSeedsBalance(),
+        playerEconomyRepository.observeXpTotal()
+    ) { seedsBalance, xpTotal ->
+        val progress = playerXpProgress(xpTotal)
+        HabitEconomyUiState(
+            seedsBalance = seedsBalance,
+            level = progress.level,
+            xpIntoLevel = progress.xpIntoLevel,
+            xpRequiredForNextLevel = progress.xpRequiredForNextLevel,
+            xpProgressFraction = progress.fraction
+        )
+    }
+
+    val uiState: StateFlow<HabitListUiState> = combine(habitUiState, economyUiState) { habitState, economy ->
+        habitState.copy(
+            seedsBalance = economy.seedsBalance,
+            level = economy.level,
+            xpIntoLevel = economy.xpIntoLevel,
+            xpRequiredForNextLevel = economy.xpRequiredForNextLevel,
+            xpProgressFraction = economy.xpProgressFraction
         )
     }.stateIn(
         scope = viewModelScope,
@@ -272,4 +314,9 @@ class HabitViewModel @Inject constructor(
             debugFireResultFlow.value = "Cleared posted-ids for $today"
         }
     }
+}
+
+private object EmptyPlayerEconomyRepository : PlayerEconomyRepository {
+    override fun observeSeedsBalance() = flowOf(0L)
+    override fun observeXpTotal() = flowOf(0L)
 }
