@@ -196,7 +196,7 @@ Daily entry with optional prompts. A journal streak grows a bonfire in the world
 - Notification and animation intensity settings.
 
 ### 8.7 Widgets
-- Today's progress ring plus tappable habit list (completes in place).
+- Today's progress ring plus a scrollable tappable list of all habits due today (completes in place). The widget has no row cap or "+N more" row; pending habits are listed before completed or skipped habits.
 - Companion/expedition widget.
 
 ### 8.8 Health Connect (v3)
