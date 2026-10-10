@@ -40,6 +40,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.habitat.app.BuildConfig
 import com.habitat.app.MainActivity
 import com.habitat.app.R
 import com.habitat.app.domain.logic.WidgetCompletionDecision
@@ -61,7 +62,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import java.time.Instant
 import java.time.LocalDate
 import java.nio.charset.StandardCharsets
 import java.util.UUID
@@ -79,8 +79,9 @@ class HabitGlanceWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Responsive(setOf(SMALL_WIDGET_SIZE, MEDIUM_WIDGET_SIZE))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val renderStartedAt = Instant.now()
-        Log.d(TAG, "provideGlance started timestamp=$renderStartedAt glanceId=$id")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "provideGlance started timestamp=${System.currentTimeMillis()} glanceId=$id")
+        }
         val stateFlow = try {
             withContext(Dispatchers.IO) {
                 val entryPoint = EntryPointAccessors.fromApplication(
@@ -112,13 +113,6 @@ class HabitGlanceWidget : GlanceAppWidget() {
         provideContent {
             val contentState = renderFlow?.collectAsState(initial = WidgetDataState.Loading)?.value
                 ?: WidgetDataState.Error
-            val snapshot = (contentState as? WidgetDataState.Ready)?.renderState
-            Log.d(
-                TAG,
-                "WidgetContent recomposed timestamp=${Instant.now()} " +
-                    "state=${snapshot?.displayState?.toDiagnosticLabel() ?: contentState.javaClass.simpleName} " +
-                    "logicalDate=${snapshot?.renderedLogicalDate} refreshGeneration=${snapshot?.refreshGeneration} glanceId=$id"
-            )
             when (contentState) {
                 WidgetDataState.Loading -> WidgetFallback(
                     title = "Loading your habits…",
@@ -141,14 +135,6 @@ private sealed interface WidgetDataState {
     object Loading : WidgetDataState
     object Error : WidgetDataState
     data class Ready(val renderState: WidgetRenderState) : WidgetDataState
-}
-
-private fun WidgetDisplayState.toDiagnosticLabel(): String = when (this) {
-    WidgetDisplayState.NoHabits -> "NoHabits"
-    WidgetDisplayState.NothingDueToday -> "NothingDueToday"
-    is WidgetDisplayState.AllSkipped -> "AllSkipped(rows=${rows.size})"
-    is WidgetDisplayState.Habits ->
-        "Habits(rows=${rows.size}, completed=$completedCount/$totalDueCount, allCompleted=$allCompleted)"
 }
 
 @androidx.glance.GlanceComposable

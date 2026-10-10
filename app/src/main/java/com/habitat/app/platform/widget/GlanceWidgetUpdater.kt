@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.updateAll
+import com.habitat.app.BuildConfig
 import com.habitat.app.domain.WidgetRefreshSignal
 import com.habitat.app.domain.WidgetUpdater
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -26,15 +27,23 @@ class GlanceWidgetUpdater @Inject constructor(
         try {
             mutableRefreshGeneration.update { it + 1 }
             val widget = habitWidgetForUpdate()
-            Log.d(TAG, "updateWidget invoked widgetClass=${widget::class.java.name}")
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "updateWidget invoked widgetClass=${widget::class.java.name}")
+            }
             val glanceIds = GlanceAppWidgetManager(context).getGlanceIds(widget::class.java)
-            Log.d(TAG, "updateWidget found glanceIdCount=${glanceIds.size} widgetClass=${widget::class.java.name}")
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "updateWidget found glanceIdCount=${glanceIds.size} widgetClass=${widget::class.java.name}")
+            }
             widget.updateAll(context)
-            Log.d(TAG, "updateAll completed widgetClass=${widget::class.java.name} glanceIdCount=${glanceIds.size}")
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "updateAll completed widgetClass=${widget::class.java.name} glanceIdCount=${glanceIds.size}")
+            }
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
-            Log.e(TAG, "Unable to refresh Habitat widgets; stack trace follows", exception)
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Unable to refresh Habitat widgets; stack trace follows", exception)
+            }
         }
     }
 
