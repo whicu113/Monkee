@@ -4,6 +4,7 @@ import com.habitat.app.data.FakeCompletionDao
 import com.habitat.app.data.repository.CompletionRepositoryImpl
 import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.WidgetUpdater
+import com.habitat.app.domain.createLogCompletionUseCaseFixture
 import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.usecase.LogCompletionUseCase
 import com.habitat.app.domain.FakeCompletionReminderHandler
@@ -39,7 +40,7 @@ class HabitWidgetUpdaterIntegrationTest {
             habitRepository = habits,
             completionRepository = completions,
             settingsRepository = settings,
-            logCompletionUseCase = LogCompletionUseCase(completions, clock, FakeCompletionReminderHandler()),
+            logCompletionUseCase = createLogCompletionUseCaseFixture(completions, clock, FakeCompletionReminderHandler()),
             reminderFulfillmentHandler = ReminderFulfillmentHandler(habits, completions, settings, clock),
             clock = clock,
             widgetUpdater = WidgetUpdater { throw IllegalStateException("provider unavailable") }

@@ -4,6 +4,7 @@ import com.habitat.app.data.FakeCompletionDao
 import com.habitat.app.data.repository.CompletionRepositoryImpl
 import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.WidgetUpdater
+import com.habitat.app.domain.createLogCompletionUseCaseFixture
 import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.model.ScheduleType
@@ -57,7 +58,7 @@ class PlatformCompletionReminderHandlerTest {
             widgetUpdater = throwingUpdater
         )
 
-        val logged = LogCompletionUseCase(completionRepo, clock, handler)
+        val logged = createLogCompletionUseCaseFixture(completionRepo, clock, handler)
             .executeLog("h1", CompletionState.DONE, LocalDate.of(2025, 5, 10))
 
         assertTrue("row 'Test Habit' completion still logs", logged)

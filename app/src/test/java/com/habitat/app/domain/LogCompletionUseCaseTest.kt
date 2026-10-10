@@ -5,6 +5,7 @@ import com.habitat.app.data.FakeCompletionDao
 import com.habitat.app.data.repository.CompletionRepositoryImpl
 import com.habitat.app.domain.WidgetUpdater
 import com.habitat.app.domain.model.CompletionState
+import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.usecase.CompletionReminderHandler
 import com.habitat.app.domain.usecase.LogCompletionUseCase
 import kotlinx.coroutines.test.runTest
@@ -19,7 +20,7 @@ import java.time.ZoneId
 
 class LogCompletionUseCaseTest {
 
-    private lateinit var repository: CompletionRepositoryImpl
+    private lateinit var repository: CompletionRepository
     private lateinit var fakeHandler: FakeCompletionReminderHandler
     private lateinit var useCase: LogCompletionUseCase
 
@@ -33,7 +34,7 @@ class LogCompletionUseCaseTest {
     fun setUp() {
         repository = CompletionRepositoryImpl(FakeCompletionDao())
         fakeHandler = FakeCompletionReminderHandler()
-        useCase = LogCompletionUseCase(repository, clock, fakeHandler)
+        useCase = createLogCompletionUseCaseFixture(repository, clock, fakeHandler)
     }
 
     @Test
@@ -105,7 +106,7 @@ class LogCompletionUseCaseTest {
 
     @Test
     fun `executeRemove completes when widget updater throws for the row`() = runTest {
-        useCase = LogCompletionUseCase(
+        useCase = createLogCompletionUseCaseFixture(
             repository,
             clock,
             fakeHandler,

@@ -1,11 +1,16 @@
 package com.habitat.app.domain.usecase
 
 import com.habitat.app.domain.AppClock
+import com.habitat.app.domain.HabitRewardResult
+import com.habitat.app.domain.RewardNoRewardReason
+import com.habitat.app.domain.RewardTransactionRunner
 import com.habitat.app.domain.WidgetUpdater
+import com.habitat.app.domain.logic.RewardRandom
 import com.habitat.app.domain.updateSafely
 import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.model.LoggedCompletion
 import com.habitat.app.domain.repository.CompletionRepository
+import com.habitat.app.domain.repository.SettingsRepository
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -18,8 +23,28 @@ class LogCompletionUseCase @Inject constructor(
     private val completionRepository: CompletionRepository,
     private val clock: AppClock,
     private val reminderHandler: CompletionReminderHandler,
-    private val widgetUpdater: WidgetUpdater = WidgetUpdater { }
+    private val widgetUpdater: WidgetUpdater,
+    private val settingsRepository: SettingsRepository,
+    private val transactionRunner: RewardTransactionRunner,
+    private val rewardRandom: RewardRandom
 ) : WidgetCompletionLogger {
+
+    /** Reward-aware API; the integration is intentionally behavior-preserving until its next change. */
+    suspend fun executeLogWithResult(
+        habitId: String,
+        state: CompletionState,
+        logicalDate: LocalDate
+    ): HabitRewardResult {
+        val logged = executeLog(habitId, state, logicalDate)
+        if (!logged) return HabitRewardResult.NoReward(RewardNoRewardReason.BACKFILL)
+        return HabitRewardResult.Granted(
+            seeds = 0,
+            xp = 0,
+            drop = null,
+            comebackApplied = false,
+            capApplied = 0
+        )
+    }
 
     /**
      * Logs or updates a completion entry for [habitId] on [logicalDate].
