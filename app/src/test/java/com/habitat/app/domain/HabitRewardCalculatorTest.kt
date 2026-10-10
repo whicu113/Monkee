@@ -131,11 +131,9 @@ class HabitRewardCalculatorTest {
                 rewardIdempotencyKey(row.habitId, row.date, row.stage, row.currency)
             )
         }
-        assertNotEquals(
-            "currency row: XP and Seeds keys differ",
-            rows[0].expected,
-            rows[2].expected
-        )
+        val seedsKey = rewardIdempotencyKey("habit-a", date, RewardStage.MINIMUM, RewardCurrency.SEEDS)
+        val xpKey = rewardIdempotencyKey("habit-a", date, RewardStage.MINIMUM, RewardCurrency.XP)
+        assertNotEquals("currency row: XP and Seeds keys differ", seedsKey, xpKey)
     }
 
     @Test
