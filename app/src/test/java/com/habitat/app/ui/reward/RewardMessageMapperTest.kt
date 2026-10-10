@@ -48,6 +48,11 @@ class RewardMessageMapperTest {
                 )
             ),
             Row(
+                name = "zero Seeds and XP without cap has no message",
+                result = HabitRewardResult.Granted(0, 0, null, false, 0),
+                expected = emptyList()
+            ),
+            Row(
                 name = "Done then Minimum is already rewarded with no message",
                 result = HabitRewardResult.NoReward(RewardNoRewardReason.ALREADY_REWARDED),
                 expected = emptyList()
