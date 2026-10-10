@@ -3,10 +3,12 @@ package com.habitat.app.domain
 import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.model.Difficulty
 import com.habitat.app.domain.logic.DropRarity
+import com.habitat.app.domain.logic.RewardCurrency
 import com.habitat.app.domain.logic.RewardStage
 import com.habitat.app.domain.logic.calculateHabitReward
 import com.habitat.app.domain.logic.rewardIdempotencyKey
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 import java.time.LocalDate
 
@@ -105,18 +107,35 @@ class HabitRewardCalculatorTest {
     }
 
     @Test
-    fun `idempotency key separates habit date and reward stage`() {
+    fun `idempotency key separates habit date stage and currency`() {
         val date = LocalDate.of(2026, 10, 10)
-        val rows = listOf(
-            Triple("habit-a", date, RewardStage.MINIMUM) to "habit-a:2026-10-10:MINIMUM",
-            Triple("habit-a", date, RewardStage.DONE) to "habit-a:2026-10-10:DONE",
-            Triple("habit-b", date, RewardStage.MINIMUM) to "habit-b:2026-10-10:MINIMUM",
-            Triple("habit-a", date.plusDays(1), RewardStage.MINIMUM) to "habit-a:2026-10-11:MINIMUM"
+        data class Row(
+            val name: String,
+            val habitId: String,
+            val date: LocalDate,
+            val stage: RewardStage,
+            val currency: RewardCurrency,
+            val expected: String
         )
-        rows.forEachIndexed { index, (keyInput, expected) ->
-            assertEquals("idempotency row $index: stable stage key", expected,
-                rewardIdempotencyKey(keyInput.first, keyInput.second, keyInput.third))
+        val rows = listOf(
+            Row("minimum Seeds", "habit-a", date, RewardStage.MINIMUM, RewardCurrency.SEEDS, "habit-a|2026-10-10|MINIMUM|SEEDS"),
+            Row("done Seeds", "habit-a", date, RewardStage.DONE, RewardCurrency.SEEDS, "habit-a|2026-10-10|DONE|SEEDS"),
+            Row("minimum XP", "habit-a", date, RewardStage.MINIMUM, RewardCurrency.XP, "habit-a|2026-10-10|MINIMUM|XP"),
+            Row("other habit", "habit-b", date, RewardStage.MINIMUM, RewardCurrency.SEEDS, "habit-b|2026-10-10|MINIMUM|SEEDS"),
+            Row("other date", "habit-a", date.plusDays(1), RewardStage.MINIMUM, RewardCurrency.SEEDS, "habit-a|2026-10-11|MINIMUM|SEEDS")
+        )
+        rows.forEach { row ->
+            assertEquals(
+                "${row.name}: stable idempotency key",
+                row.expected,
+                rewardIdempotencyKey(row.habitId, row.date, row.stage, row.currency)
+            )
         }
+        assertNotEquals(
+            "currency row: XP and Seeds keys differ",
+            rows[0].expected,
+            rows[2].expected
+        )
     }
 
     @Test

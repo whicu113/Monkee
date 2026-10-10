@@ -11,9 +11,18 @@ enum class RewardStage {
     DONE
 }
 
+enum class RewardCurrency {
+    SEEDS,
+    XP
+}
+
 /** Builds the stable per-habit, logical-date, reward-stage idempotency key. */
-fun rewardIdempotencyKey(habitId: String, logicalDate: LocalDate, stage: RewardStage): String =
-    "$habitId:$logicalDate:${stage.name}"
+fun rewardIdempotencyKey(
+    habitId: String,
+    logicalDate: LocalDate,
+    stage: RewardStage,
+    currency: RewardCurrency
+): String = "$habitId|$logicalDate|${stage.name}|${currency.name}"
 
 /** Reward inputs fixed when the first stage for a habit/date was granted. */
 data class RewardBasis(val difficulty: Difficulty, val streakLength: Int, val comeback: Boolean)
