@@ -19,7 +19,7 @@ class HabitRewardCalculatorTest {
             Row("easy done", Difficulty.EASY, CompletionState.DONE, 10),
             Row("easy minimum", Difficulty.EASY, CompletionState.MINIMUM, 6),
             Row("medium done", Difficulty.MEDIUM, CompletionState.DONE, 15),
-            Row("medium minimum half up", Difficulty.MEDIUM, CompletionState.MINIMUM, 9),
+            Row("medium minimum exact", Difficulty.MEDIUM, CompletionState.MINIMUM, 9),
             Row("hard done", Difficulty.HARD, CompletionState.DONE, 20),
             Row("hard minimum", Difficulty.HARD, CompletionState.MINIMUM, 12)
         )
@@ -32,7 +32,6 @@ class HabitRewardCalculatorTest {
                 comeback = false,
                 grantedByStage = emptyMap(),
                 seedsEarnedToday = 0,
-                xpEarnedToday = 0,
                 rng = FixedRewardRandom(99, 99),
                 pityCounter = 0
             )
@@ -45,7 +44,7 @@ class HabitRewardCalculatorTest {
         val rows = listOf(9 to 19, 10 to 20, 25 to 20)
         rows.forEachIndexed { index, (streak, expected) ->
             val result = calculateHabitReward(
-                CompletionState.DONE, Difficulty.EASY, streak, false, emptyMap(), 0, 0,
+                CompletionState.DONE, Difficulty.EASY, streak, false, emptyMap(), 0,
                 FixedRewardRandom(99, 99), 0
             )
             assertEquals("streak row $index: capped Seeds", expected, result.seedsGranted)
@@ -55,7 +54,7 @@ class HabitRewardCalculatorTest {
     @Test
     fun `comeback bonus multiplies entitlement and rounds half up`() {
         val result = calculateHabitReward(
-            CompletionState.MINIMUM, Difficulty.MEDIUM, 0, true, emptyMap(), 0, 0,
+            CompletionState.MINIMUM, Difficulty.MEDIUM, 0, true, emptyMap(), 0,
             FixedRewardRandom(99, 99), 0
         )
         assertEquals("minimum medium comeback: half up Seeds", 14, result.seedsGranted)
@@ -67,7 +66,7 @@ class HabitRewardCalculatorTest {
         val rows = listOf(Row("remaining room", 295, 5), Row("at cap", 300, 0), Row("over cap", 305, 0))
         rows.forEach { row ->
             val result = calculateHabitReward(
-                CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), row.earned, 149,
+                CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), row.earned,
                 FixedRewardRandom(99, 99), 0
             )
             assertEquals("${row.name}: Seeds", row.expected, result.seedsGranted)
@@ -76,24 +75,15 @@ class HabitRewardCalculatorTest {
     }
 
     @Test
-    fun `habit XP remains uncapped after the focus XP cap`() {
-        val result = calculateHabitReward(
-            CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0, 150,
-            FixedRewardRandom(99, 99), 0
-        )
-        assertEquals("habit XP row after focus cap", 10, result.xpGranted)
-    }
-
-    @Test
     fun `minimum then done pays entitlement difference and retains first grant inputs`() {
         val minimum = calculateHabitReward(
-            CompletionState.MINIMUM, Difficulty.HARD, 4, true, emptyMap(), 0, 0,
+            CompletionState.MINIMUM, Difficulty.HARD, 4, true, emptyMap(), 0,
             FixedRewardRandom(99, 99), 0
         )
         val upgraded = calculateHabitReward(
             CompletionState.DONE, Difficulty.EASY, 99, false,
             mapOf(RewardStage.MINIMUM to minimum.grantedAmounts!!),
-            minimum.seedsGranted, minimum.xpGranted, FixedRewardRandom(99, 99), minimum.pityCounterAfter
+            minimum.seedsGranted, FixedRewardRandom(99, 99), minimum.pityCounterAfter
         )
         assertEquals("upgrade: difference between original entitlements", 12, upgraded.seedsGranted)
         assertEquals("upgrade: no duplicate XP entitlement", 0, upgraded.xpGranted)
@@ -102,13 +92,13 @@ class HabitRewardCalculatorTest {
     @Test
     fun `difficulty edits do not change already granted historical entitlement`() {
         val original = calculateHabitReward(
-            CompletionState.DONE, Difficulty.HARD, 3, false, emptyMap(), 0, 0,
+            CompletionState.DONE, Difficulty.HARD, 3, false, emptyMap(), 0,
             FixedRewardRandom(99, 99), 0
         )
         val afterEdit = calculateHabitReward(
             CompletionState.DONE, Difficulty.EASY, 0, false,
             mapOf(RewardStage.DONE to original.grantedAmounts!!),
-            original.seedsGranted, original.xpGranted, FixedRewardRandom(0, 0), original.pityCounterAfter
+            original.seedsGranted, FixedRewardRandom(0, 0), original.pityCounterAfter
         )
         assertEquals("difficulty edit: no retroactive Seeds", 0, afterEdit.seedsGranted)
         assertEquals("difficulty edit: no retroactive XP", 0, afterEdit.xpGranted)
@@ -147,7 +137,7 @@ class HabitRewardCalculatorTest {
 
         rows.forEach { row ->
             val result = calculateHabitReward(
-                CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0, 0,
+                CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0,
                 FixedRewardRandom(*row.randomRolls.toIntArray()), row.counter
             )
             assertEquals("${row.name}: drop", row.expectedDrop, result.drop)
@@ -158,18 +148,18 @@ class HabitRewardCalculatorTest {
     @Test
     fun `pity counter stays unchanged for minimum and repeated done stages`() {
         val minimum = calculateHabitReward(
-            CompletionState.MINIMUM, Difficulty.EASY, 0, false, emptyMap(), 0, 0,
+            CompletionState.MINIMUM, Difficulty.EASY, 0, false, emptyMap(), 0,
             FixedRewardRandom(0, 0), 12
         )
         assertEquals("minimum row: pity unchanged", 12, minimum.pityCounterAfter)
 
         val done = calculateHabitReward(
-            CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0, 0,
+            CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0,
             FixedRewardRandom(99, 99), 12
         )
         val repeat = calculateHabitReward(
             CompletionState.DONE, Difficulty.EASY, 0, false,
-            mapOf(RewardStage.DONE to done.grantedAmounts!!), done.seedsGranted, done.xpGranted,
+            mapOf(RewardStage.DONE to done.grantedAmounts!!), done.seedsGranted,
             FixedRewardRandom(0, 0), done.pityCounterAfter
         )
         assertEquals("repeat row: no second counter movement", done.pityCounterAfter, repeat.pityCounterAfter)
@@ -178,11 +168,12 @@ class HabitRewardCalculatorTest {
 
     @Test
     fun `seeded rarity distribution follows configured weights within tolerance`() {
+        // Distribution check is a sanity check; the boundary table below proves each weight interval.
         val counts = DropRarity.entries.associateWith { 0 }.toMutableMap()
         val random = java.util.Random(451)
         repeat(10_000) { index ->
             val result = calculateHabitReward(
-                CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0, 0,
+                CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0,
                 com.habitat.app.domain.logic.RewardRandom { bound -> random.nextInt(bound) }, index % 29
             )
             result.drop?.let { counts[it] = counts.getValue(it) + 1 }
@@ -197,6 +188,27 @@ class HabitRewardCalculatorTest {
         expected.forEach { (rarity, percent) ->
             val observed = counts.getValue(rarity) * 100.0 / dropCount
             assertEquals("rarity row $rarity: weighted share", percent.toDouble(), observed, 1.5)
+        }
+    }
+
+    @Test
+    fun `rarity rolls map each configured weight boundary`() {
+        data class Row(val name: String, val roll: Int, val expected: DropRarity)
+        val rows = listOf(
+            Row("common lower boundary", 0, DropRarity.COMMON),
+            Row("common upper boundary", 69, DropRarity.COMMON),
+            Row("uncommon lower boundary", 70, DropRarity.UNCOMMON),
+            Row("uncommon upper boundary", 91, DropRarity.UNCOMMON),
+            Row("rare lower boundary", 92, DropRarity.RARE),
+            Row("rare upper boundary", 98, DropRarity.RARE),
+            Row("legendary boundary", 99, DropRarity.LEGENDARY)
+        )
+        rows.forEach { row ->
+            val result = calculateHabitReward(
+                CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0,
+                FixedRewardRandom(0, row.roll), 0
+            )
+            assertEquals("${row.name}: weighted rarity", row.expected, result.drop)
         }
     }
 

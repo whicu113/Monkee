@@ -56,11 +56,9 @@ fun calculateHabitReward(
     comeback: Boolean,
     grantedByStage: Map<RewardStage, RewardAmounts>,
     seedsEarnedToday: Int,
-    xpEarnedToday: Int,
     rng: RewardRandom,
     pityCounter: Int
 ): RewardCalculation {
-    require(xpEarnedToday >= 0) { "Habit XP earned today cannot be negative" }
     if (state == CompletionState.SKIPPED) {
         return RewardCalculation(0, 0, null, pityCounter.coerceAtLeast(0), null)
     }
