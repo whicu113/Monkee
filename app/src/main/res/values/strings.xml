@@ -12,6 +12,14 @@
     <string name="reward_comeback">Welcome back. Your comeback bonus is included.</string>
     <string name="reward_daily_seeds_cap">You\'ve earned today\'s maximum Seeds.</string>
     <string name="reward_drop_found">You found something!</string>
+    <string name="world_spike_title">M6 Rendering Spike</string>
+    <string name="world_spike_workload">%1$d visible isometric tiles · continuous panning</string>
+    <string name="world_spike_canvas">Canvas</string>
+    <string name="world_spike_compose">Compose tiles</string>
+    <string name="world_spike_drag_hint">The scene pans continuously; drag to adjust its position.</string>
+    <string name="world_spike_draw_report">Draw report: %1$d frames · minimum %2$d / %3$d tiles in a frame</string>
+    <string name="world_spike_reset_counter">Reset count</string>
+    <string name="world_spike_read_counter">Read count</string>
     <plurals name="reward_seeds_earned">
         <item quantity="one">+%1$d Seed</item>
         <item quantity="other">+%1$d Seeds</item>

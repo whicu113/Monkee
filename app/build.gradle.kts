@@ -28,6 +28,12 @@ android {
                 "proguard-rules.pro"
             )
         }
+        create("benchmark") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".benchmark"
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -38,7 +44,11 @@ android {
         buildConfig = true
     }
     sourceSets {
-        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+        getByName("androidTest").assets.directories.add("$projectDir/schemas")
+        getByName("benchmark") {
+            java.directories.add("src/debug/java")
+            manifest.srcFile("src/benchmark/AndroidManifest.xml")
+        }
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
