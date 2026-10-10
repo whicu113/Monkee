@@ -24,6 +24,7 @@ import com.habitat.app.domain.repository.SettingsRepository
 import com.habitat.app.domain.playerXpProgress
 import com.habitat.app.domain.usecase.LogCompletionUseCase
 import com.habitat.app.ui.reward.RewardMessageSpec
+import com.habitat.app.ui.reward.mapRewardResultToMessages
 import com.habitat.app.platform.NotificationHelper
 import com.habitat.app.platform.ReminderScheduler
 import android.util.Log
@@ -202,7 +203,11 @@ class HabitViewModel @Inject constructor(
 
     fun toggleCheckOff(habitId: String, state: CompletionState, date: LocalDate) {
         viewModelScope.launch {
-            logCompletionUseCase.executeLogWithResult(habitId, state, date)
+            val result = logCompletionUseCase.executeLogWithResult(habitId, state, date)
+            val messages = mapRewardResultToMessages(result)
+            if (messages.isNotEmpty()) {
+                rewardMessageChannel.trySend(messages)
+            }
         }
     }
 
