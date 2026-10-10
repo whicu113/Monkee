@@ -3,6 +3,7 @@ package com.habitat.app.ui.habit
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.habitat.app.BuildConfig
 import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.SystemAppClock
 import com.habitat.app.domain.WidgetUpdater
@@ -207,6 +208,7 @@ class HabitViewModel @Inject constructor(
     }
 
     fun shiftDebugTime(days: Long, hours: Long) {
+        if (!BuildConfig.DEBUG) return
         if (clock is SystemAppClock) {
             clock.shiftTime(days, hours)
             selectedDateFlow.value = clock.logicalDate()
@@ -214,6 +216,7 @@ class HabitViewModel @Inject constructor(
     }
 
     fun resetDebugTime() {
+        if (!BuildConfig.DEBUG) return
         if (clock is SystemAppClock) {
             clock.resetShift()
             selectedDateFlow.value = clock.logicalDate()
