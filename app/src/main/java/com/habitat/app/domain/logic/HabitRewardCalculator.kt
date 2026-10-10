@@ -114,7 +114,7 @@ private fun entitlement(
 }
 
 private fun rollDrop(rng: RewardRandom, pityCounter: Int): DropRarity? {
-    if (pityCounter >= GameConfig.HABIT_DROP_PITY_COUNT - 1 || rng.nextInt(100) < GameConfig.HABIT_DROP_CHANCE_PERCENT) {
+    if (pityCounter >= GameConfig.HABIT_DROP_PITY_COUNT || rng.nextInt(100) < GameConfig.HABIT_DROP_CHANCE_PERCENT) {
         val total = GameConfig.DROP_RARITY_COMMON_WEIGHT + GameConfig.DROP_RARITY_UNCOMMON_WEIGHT +
             GameConfig.DROP_RARITY_RARE_WEIGHT + GameConfig.DROP_RARITY_LEGENDARY_WEIGHT
         val roll = rng.nextInt(total)

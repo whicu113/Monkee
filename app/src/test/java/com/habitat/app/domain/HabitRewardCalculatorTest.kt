@@ -130,13 +130,50 @@ class HabitRewardCalculatorTest {
     }
 
     @Test
-    fun `pity guarantees a drop on thirtieth done grant`() {
-        val result = calculateHabitReward(
-            CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0, 0,
-            FixedRewardRandom(0), 29
+    fun `pity guarantees the thirty first first done grant and resets after any drop`() {
+        data class Row(
+            val name: String,
+            val counter: Int,
+            val randomRolls: List<Int>,
+            val expectedDrop: DropRarity?,
+            val expectedCounter: Int
         )
-        assertEquals("pity row: guaranteed common drop", DropRarity.COMMON, result.drop)
-        assertEquals("pity row: reset after drop", 0, result.pityCounterAfter)
+        val rows = listOf(
+            Row("counter 29 still rolls normally", 29, listOf(99), null, 30),
+            Row("counter 30 guarantees the next drop", 30, listOf(0), DropRarity.COMMON, 0),
+            Row("natural drop resets the counter", 8, listOf(0, 0), DropRarity.COMMON, 0),
+            Row("pity drop resets the counter", 30, listOf(0), DropRarity.COMMON, 0)
+        )
+
+        rows.forEach { row ->
+            val result = calculateHabitReward(
+                CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0, 0,
+                FixedRewardRandom(*row.randomRolls.toIntArray()), row.counter
+            )
+            assertEquals("${row.name}: drop", row.expectedDrop, result.drop)
+            assertEquals("${row.name}: counter", row.expectedCounter, result.pityCounterAfter)
+        }
+    }
+
+    @Test
+    fun `pity counter stays unchanged for minimum and repeated done stages`() {
+        val minimum = calculateHabitReward(
+            CompletionState.MINIMUM, Difficulty.EASY, 0, false, emptyMap(), 0, 0,
+            FixedRewardRandom(0, 0), 12
+        )
+        assertEquals("minimum row: pity unchanged", 12, minimum.pityCounterAfter)
+
+        val done = calculateHabitReward(
+            CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0, 0,
+            FixedRewardRandom(99, 99), 12
+        )
+        val repeat = calculateHabitReward(
+            CompletionState.DONE, Difficulty.EASY, 0, false,
+            mapOf(RewardStage.DONE to done.grantedAmounts!!), done.seedsGranted, done.xpGranted,
+            FixedRewardRandom(0, 0), done.pityCounterAfter
+        )
+        assertEquals("repeat row: no second counter movement", done.pityCounterAfter, repeat.pityCounterAfter)
+        assertEquals("repeat row: no second drop", null, repeat.drop)
     }
 
     @Test
