@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.room.Room
 import com.habitat.app.data.local.AppDatabase
 import com.habitat.app.data.local.CompletionDao
+import com.habitat.app.data.local.DropRecordDao
 import com.habitat.app.data.local.HabitDao
 import com.habitat.app.data.local.HabitGroupDao
+import com.habitat.app.data.local.LedgerEntryDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -27,7 +29,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "habitat.db"
         )
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
             .build()
     }
 
@@ -44,5 +46,15 @@ object DatabaseModule {
     @Provides
     fun provideCompletionDao(database: AppDatabase): CompletionDao {
         return database.completionDao()
+    }
+
+    @Provides
+    fun provideLedgerEntryDao(database: AppDatabase): LedgerEntryDao {
+        return database.ledgerEntryDao()
+    }
+
+    @Provides
+    fun provideDropRecordDao(database: AppDatabase): DropRecordDao {
+        return database.dropRecordDao()
     }
 }

@@ -11,9 +11,11 @@ import com.habitat.app.data.local.converters.HabitConverters
     entities = [
         HabitEntity::class,
         HabitGroupEntity::class,
-        CompletionEntity::class
+        CompletionEntity::class,
+        LedgerEntryEntity::class,
+        DropRecordEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(HabitConverters::class)
@@ -21,6 +23,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun habitGroupDao(): HabitGroupDao
     abstract fun completionDao(): CompletionDao
+    abstract fun ledgerEntryDao(): LedgerEntryDao
+    abstract fun dropRecordDao(): DropRecordDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -41,6 +45,29 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE `habits` ADD COLUMN `reminderTime` TEXT DEFAULT NULL"
+                )
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `ledger_entries` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `currency` TEXT NOT NULL, `delta` INTEGER NOT NULL, `reason` TEXT NOT NULL, `habitId` TEXT, `logicalDate` TEXT, `createdAt` INTEGER NOT NULL, `idempotencyKey` TEXT NOT NULL, `rewardStage` TEXT, `difficulty` TEXT, `streakLength` INTEGER, `comebackApplied` INTEGER, `stageEntitlementAmount` INTEGER, `pityCounterAfter` INTEGER)"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_ledger_entries_idempotencyKey` ON `ledger_entries` (`idempotencyKey`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_ledger_entries_reason_currency_logicalDate` ON `ledger_entries` (`reason`, `currency`, `logicalDate`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_ledger_entries_habitId_logicalDate` ON `ledger_entries` (`habitId`, `logicalDate`)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `drop_records` (`id` TEXT NOT NULL, `rarity` TEXT NOT NULL, `habitId` TEXT NOT NULL, `logicalDate` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_drop_records_habitId_logicalDate` ON `drop_records` (`habitId`, `logicalDate`)"
                 )
             }
         }
