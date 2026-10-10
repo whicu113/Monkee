@@ -238,6 +238,8 @@ Rules:
 
 ## 12. Milestones and acceptance criteria
 
+Implementation stack note: WorkManager is not used yet; it will be added when a feature needs it.
+
 **M0: Project skeleton.** App launches, git initialized, CI-less local build works.
 
 **M1: Habit CRUD.** Create, edit, archive habits; persisted; unit tests for schedule evaluation.

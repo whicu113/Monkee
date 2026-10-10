@@ -10,6 +10,7 @@ Habitat is an Android-first, local-first, gamified habit tracker written in Kotl
 - Room (SQLite) for storage, DataStore for simple settings
 - AlarmManager for inexact battery-efficient reminders
 - Glance for widgets
+- WorkManager is not used yet; it will be added when a feature needs it.
 - Hilt for dependency injection
 - JUnit 4 for unit tests; Turbine for Flow tests
 - minSdk 26. Handle Android 13+ notification permission (`POST_NOTIFICATIONS`).
