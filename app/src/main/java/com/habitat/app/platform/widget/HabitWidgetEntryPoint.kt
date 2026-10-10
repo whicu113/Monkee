@@ -4,6 +4,7 @@ import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
 import com.habitat.app.domain.repository.SettingsRepository
+import com.habitat.app.domain.usecase.LogCompletionUseCase
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
@@ -15,4 +16,5 @@ interface HabitWidgetEntryPoint {
     fun completionRepository(): CompletionRepository
     fun settingsRepository(): SettingsRepository
     fun appClock(): AppClock
+    fun logCompletionUseCase(): LogCompletionUseCase
 }

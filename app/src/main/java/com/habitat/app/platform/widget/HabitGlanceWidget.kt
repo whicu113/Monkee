@@ -5,6 +5,8 @@ import android.util.Log
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
@@ -15,6 +17,8 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.action.actionStartActivity
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -35,21 +39,32 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.habitat.app.MainActivity
 import com.habitat.app.R
+import com.habitat.app.domain.AppClock
+import com.habitat.app.domain.logic.WidgetCompletionDecision
 import com.habitat.app.domain.logic.WidgetDisplayState
 import com.habitat.app.domain.logic.WidgetHabitRow
 import com.habitat.app.domain.logic.WidgetProgressRingMapper
 import com.habitat.app.domain.logic.WidgetRowActionState
 import com.habitat.app.domain.logic.WidgetStateBuilder
+import com.habitat.app.domain.logic.widgetCompletionDecision
+import com.habitat.app.domain.model.CompletionState
+import com.habitat.app.domain.model.ScheduleType
 import com.habitat.app.domain.logic.rowActions
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 private val SMALL_WIDGET_SIZE = DpSize(130.dp, 160.dp)
 private val MEDIUM_WIDGET_SIZE = DpSize(250.dp, 380.dp)
 private const val TAG = "HabitGlanceWidget"
+private val HabitIdParameter = ActionParameters.Key<String>("habitId")
+private val CompletionStateParameter = ActionParameters.Key<String>("completionState")
+private val RenderedDateParameter = ActionParameters.Key<String>("renderedLogicalDate")
 
 /** Glance widget that derives today's display state from the current repositories and clock. */
 class HabitGlanceWidget : GlanceAppWidget() {
@@ -57,7 +72,7 @@ class HabitGlanceWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Responsive(setOf(SMALL_WIDGET_SIZE, MEDIUM_WIDGET_SIZE))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val state = try {
+        val snapshot = try {
             withContext(Dispatchers.IO) {
                 val entryPoint = EntryPointAccessors.fromApplication(
                     context.applicationContext,
@@ -67,11 +82,22 @@ class HabitGlanceWidget : GlanceAppWidget() {
                 val completions = entryPoint.completionRepository().getAllCompletions().first()
                 val settings = entryPoint.settingsRepository().getSettings().first()
 
-                WidgetStateBuilder.build(
-                    clock = entryPoint.appClock(),
-                    habits = habits,
-                    completions = completions,
-                    settings = settings
+                val sourceClock = entryPoint.appClock()
+                val renderInstant = sourceClock.instant()
+                val renderZone = sourceClock.zoneId()
+                val clock = object : AppClock {
+                    override fun instant(): Instant = renderInstant
+                    override fun zoneId(): ZoneId = renderZone
+                }
+                val renderedDate = clock.logicalDate(settings.dayBoundaryHour)
+                WidgetSnapshot(
+                    state = WidgetStateBuilder.build(
+                        clock = clock,
+                        habits = habits,
+                        completions = completions,
+                        settings = settings
+                    ),
+                    renderedDate = renderedDate
                 )
             }
         } catch (exception: CancellationException) {
@@ -82,21 +108,23 @@ class HabitGlanceWidget : GlanceAppWidget() {
         }
 
         provideContent {
-            if (state == null) {
+            if (snapshot == null) {
                 WidgetFallback(
                     title = "Habitat couldn't load your habits",
                     detail = "Tap to open Habitat and try again."
                 )
             } else {
-                WidgetContent(state)
+                WidgetContent(snapshot.state, snapshot.renderedDate)
             }
         }
     }
 }
 
+private data class WidgetSnapshot(val state: WidgetDisplayState, val renderedDate: LocalDate)
+
 @androidx.glance.GlanceComposable
 @androidx.compose.runtime.Composable
-private fun WidgetContent(state: WidgetDisplayState) {
+private fun WidgetContent(state: WidgetDisplayState, renderedDate: LocalDate) {
     val size = LocalSize.current
     val compact = size.width < MEDIUM_WIDGET_SIZE.width || size.height < MEDIUM_WIDGET_SIZE.height
     val cardModifier = GlanceModifier
@@ -123,7 +151,7 @@ private fun WidgetContent(state: WidgetDisplayState) {
             modifier = cardModifier
         )
 
-        is WidgetDisplayState.Habits -> HabitsCard(state, compact, cardModifier)
+        is WidgetDisplayState.Habits -> HabitsCard(state, compact, cardModifier, renderedDate)
     }
 }
 
@@ -132,7 +160,8 @@ private fun WidgetContent(state: WidgetDisplayState) {
 private fun HabitsCard(
     state: WidgetDisplayState.Habits,
     compact: Boolean,
-    modifier: GlanceModifier
+    modifier: GlanceModifier,
+    renderedDate: LocalDate
 ) {
     val ringIndex = requireNotNull(WidgetProgressRingMapper.ringIndex(state))
     val ringDescription = "Today's progress: ${state.completedCount} of ${state.totalDueCount} done"
@@ -167,7 +196,7 @@ private fun HabitsCard(
                 }
             }
             visibleRows.firstOrNull()?.let { row ->
-                CompactHabitEntry(row)
+                CompactHabitEntry(row, renderedDate)
             }
         } else {
             Row(
@@ -186,7 +215,7 @@ private fun HabitsCard(
                     )
                 }
             }
-            visibleRows.forEach { HabitRow(it) }
+            visibleRows.forEach { HabitRow(it, renderedDate) }
         }
 
         if (moreCount > 0) {
@@ -225,23 +254,23 @@ private fun NeutralRing(description: String, size: Int) {
 
 @androidx.glance.GlanceComposable
 @androidx.compose.runtime.Composable
-private fun CompactActions(row: WidgetHabitRow) {
+private fun CompactActions(row: WidgetHabitRow, renderedDate: LocalDate) {
     Row(
         modifier = GlanceModifier.fillMaxWidth().height(48.dp),
         horizontalAlignment = Alignment.Horizontal.CenterHorizontally,
         verticalAlignment = Alignment.Vertical.CenterVertically
     ) {
-        VisualAction("Done", "Mark ${row.name} as Done")
+        VisualAction(row, CompletionState.DONE, renderedDate)
         Spacer(GlanceModifier.width(8.dp))
-        VisualAction("Minimum", "Mark ${row.name} as Minimum")
+        VisualAction(row, CompletionState.MINIMUM, renderedDate)
     }
 }
 
 @androidx.glance.GlanceComposable
 @androidx.compose.runtime.Composable
-private fun CompactHabitEntry(row: WidgetHabitRow) {
+private fun CompactHabitEntry(row: WidgetHabitRow, renderedDate: LocalDate) {
     when (rowActions(row.completionState)) {
-        WidgetRowActionState.SHOW_BUTTONS -> CompactActions(row)
+        WidgetRowActionState.SHOW_BUTTONS -> CompactActions(row, renderedDate)
         else -> Row(
             modifier = GlanceModifier.fillMaxWidth().height(48.dp),
             horizontalAlignment = Alignment.Horizontal.CenterHorizontally,
@@ -260,7 +289,7 @@ private fun CompactHabitEntry(row: WidgetHabitRow) {
 
 @androidx.glance.GlanceComposable
 @androidx.compose.runtime.Composable
-private fun HabitRow(row: WidgetHabitRow) {
+private fun HabitRow(row: WidgetHabitRow, renderedDate: LocalDate) {
     Row(
         modifier = GlanceModifier.fillMaxWidth().height(48.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically
@@ -274,9 +303,9 @@ private fun HabitRow(row: WidgetHabitRow) {
                     },
                     style = primaryStyle(14)
                 )
-                VisualAction("Done", "Mark ${row.name} as Done")
+                VisualAction(row, CompletionState.DONE, renderedDate)
                 Spacer(GlanceModifier.width(4.dp))
-                VisualAction("Minimum", "Mark ${row.name} as Minimum")
+                VisualAction(row, CompletionState.MINIMUM, renderedDate)
             }
 
             else -> Text(
@@ -292,13 +321,24 @@ private fun HabitRow(row: WidgetHabitRow) {
 
 @androidx.glance.GlanceComposable
 @androidx.compose.runtime.Composable
-private fun VisualAction(label: String, description: String) {
+private fun VisualAction(row: WidgetHabitRow, state: CompletionState, renderedDate: LocalDate) {
+    val label = if (state == CompletionState.DONE) "Done" else "Minimum"
+    val description = "Mark ${row.name} as $label"
     Column(
         modifier = GlanceModifier
             .width(48.dp)
             .height(48.dp)
             .background(ColorProvider(R.color.widget_action_surface))
-            .semantics { contentDescription = description },
+            .semantics { contentDescription = description }
+            .clickable(
+                actionRunCallback<WidgetCompletionActionCallback>(
+                    actionParametersOf(
+                        HabitIdParameter to row.habitId,
+                        CompletionStateParameter to state.name,
+                        RenderedDateParameter to renderedDate.toString()
+                    )
+                )
+            ),
         horizontalAlignment = Alignment.Horizontal.CenterHorizontally,
         verticalAlignment = Alignment.Vertical.CenterVertically
     ) {
@@ -394,4 +434,59 @@ private fun habitStateDescription(row: WidgetHabitRow): String = when (row.compl
 /** BroadcastReceiver for the Habitat Glance widget. */
 class HabitWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = HabitGlanceWidget()
+}
+
+class WidgetCompletionActionCallback : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters
+    ) {
+        val habitId = parameters[HabitIdParameter]
+        val renderedDate = parameters[RenderedDateParameter]?.let {
+            runCatching { LocalDate.parse(it) }.getOrNull()
+        }
+        val completionState = parameters[CompletionStateParameter]?.let {
+            runCatching { CompletionState.valueOf(it) }.getOrNull()
+        }?.takeIf { it == CompletionState.DONE || it == CompletionState.MINIMUM }
+
+        try {
+            if (habitId == null || renderedDate == null || completionState == null) {
+                Log.e(TAG, "Widget action row '${habitId ?: "unknown"}' has invalid parameters")
+                return
+            }
+            val entryPoint = EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                HabitWidgetEntryPoint::class.java
+            )
+            val settings = entryPoint.settingsRepository().getSettings().first()
+            val currentDate = entryPoint.appClock().logicalDate(settings.dayBoundaryHour)
+            val habit = entryPoint.habitRepository().getHabitById(habitId)
+            val existing = entryPoint.completionRepository().getCompletion(habitId, renderedDate)
+            val decision = widgetCompletionDecision(
+                renderedDate = renderedDate,
+                currentLogicalDate = currentDate,
+                alreadyLogged = existing != null,
+                habitExists = habit != null,
+                habitArchived = habit?.archived == true,
+                scheduleUnknown = habit?.schedule is ScheduleType.Unknown
+            )
+            if (decision == WidgetCompletionDecision.LOG_AND_REFRESH) {
+                entryPoint.logCompletionUseCase().executeLog(habitId, completionState, renderedDate)
+            }
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            Log.e(TAG, "Widget action failed for row '${habitId ?: "unknown"}'", exception)
+        } finally {
+            try {
+                // Commit 8 can replace this single refresh seam with WidgetUpdater.
+                HabitGlanceWidget().update(context, glanceId)
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                Log.e(TAG, "Widget refresh failed for row '${habitId ?: "unknown"}'", exception)
+            }
+        }
+    }
 }
