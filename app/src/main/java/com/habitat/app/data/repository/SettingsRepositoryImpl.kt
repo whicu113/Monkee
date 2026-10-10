@@ -79,6 +79,13 @@ class SettingsRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun clearPostedHabitIds(logicalDateString: String) {
+        val key = stringSetPreferencesKey("posted_ids_$logicalDateString")
+        context.dataStore.edit { prefs ->
+            prefs.remove(key)
+        }
+    }
+
     override suspend fun pruneOldPostedHabitIds(cutoffDateString: String) {
         context.dataStore.edit { prefs ->
             val keysToRemove = prefs.asMap().keys.filter { key ->

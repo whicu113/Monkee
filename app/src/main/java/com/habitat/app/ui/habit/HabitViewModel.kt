@@ -211,6 +211,8 @@ class HabitViewModel @Inject constructor(
                 return@launch
             }
 
+            val today = clock.logicalDate()
+            val postedIds = settingsRepository.getPostedHabitIds(today.toString())
             val results = mutableListOf<String>()
 
             for (habit in targetHabits) {
@@ -224,7 +226,7 @@ class HabitViewModel @Inject constructor(
 
                 val summary = when (decision) {
                     is FireDecision.Post -> "Posted"
-                    is FireDecision.Summary -> "Summary"
+                    is FireDecision.Summary -> "Summary (cap ${postedIds.size}/3 reached)"
                     is FireDecision.Drop -> "Dropped (${decision.reason})"
                     null -> "Dropped (not found or archived)"
                 }
@@ -233,6 +235,15 @@ class HabitViewModel @Inject constructor(
             }
 
             debugFireResultFlow.value = results.joinToString("\n")
+        }
+    }
+
+    fun clearPostedIdsToday() {
+        viewModelScope.launch {
+            val today = clock.logicalDate()
+            settingsRepository.clearPostedHabitIds(today.toString())
+            Log.d("HabitatDebug", "Cleared posted-ids for $today")
+            debugFireResultFlow.value = "Cleared posted-ids for $today"
         }
     }
 }

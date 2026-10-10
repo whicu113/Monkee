@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -185,6 +186,9 @@ fun HabitListScreen(
                             }
                             OutlinedButton(onClick = { viewModel.fireRemindersNow(forcePost = true) }) {
                                 Text("Force post", fontSize = 10.sp)
+                            }
+                            OutlinedButton(onClick = { viewModel.clearPostedIdsToday() }) {
+                                Text("Clear today's posted-ids", fontSize = 10.sp)
                             }
                         }
                         uiState.debugFireResult?.let { result ->

@@ -8,5 +8,6 @@ interface SettingsRepository {
     suspend fun updateSettings(settings: AppSettings)
     suspend fun getPostedHabitIds(logicalDateString: String): Set<String>
     suspend fun addPostedHabitId(logicalDateString: String, habitId: String)
+    suspend fun clearPostedHabitIds(logicalDateString: String)
     suspend fun pruneOldPostedHabitIds(cutoffDateString: String)
 }

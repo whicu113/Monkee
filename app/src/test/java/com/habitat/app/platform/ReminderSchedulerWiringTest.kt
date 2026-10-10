@@ -114,6 +114,10 @@ class FakeSettingsRepository : SettingsRepository {
         postedMap.getOrPut(logicalDateString) { mutableSetOf() }.add(habitId)
     }
 
+    override suspend fun clearPostedHabitIds(logicalDateString: String) {
+        postedMap.remove(logicalDateString)
+    }
+
     override suspend fun pruneOldPostedHabitIds(cutoffDateString: String) {
         postedMap.keys.retainAll { it >= cutoffDateString }
     }
