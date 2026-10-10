@@ -11,6 +11,22 @@ object GameConfig {
     /** Maximum allowed habit seeds per logical day. SPEC 6.3 */
     const val DAILY_HABIT_SEEDS_CAP: Int = 300
 
+    /** Maximum allowed habit XP per logical day. SPEC Section 6.3. */
+    const val DAILY_HABIT_XP_CAP: Int = 150
+
+    const val HABIT_SEEDS_BASE: Int = 10
+    const val MINIMUM_SEEDS_FACTOR: Double = 0.6
+    const val DONE_SEEDS_FACTOR: Double = 1.0
+    const val COMEBACK_SEEDS_MULTIPLIER: Double = 1.5
+    const val MAX_STREAK_SEEDS_BONUS: Int = 10
+    const val HABIT_XP_PER_STAGE: Int = 10
+    const val HABIT_DROP_CHANCE_PERCENT: Int = 5
+    const val HABIT_DROP_PITY_COUNT: Int = 30
+    const val DROP_RARITY_COMMON_WEIGHT: Int = 70
+    const val DROP_RARITY_UNCOMMON_WEIGHT: Int = 22
+    const val DROP_RARITY_RARE_WEIGHT: Int = 7
+    const val DROP_RARITY_LEGENDARY_WEIGHT: Int = 1
+
     /** Maximum allowed focus seeds per logical day. SPEC 6.3 */
     const val DAILY_FOCUS_SEEDS_CAP: Int = 120
 
