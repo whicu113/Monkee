@@ -19,20 +19,16 @@ import java.time.LocalDate
 import javax.inject.Inject
 
 class RoomRewardTransactionRunner @Inject constructor(
-    private val database: AppDatabase,
-    private val habitDao: HabitDao,
-    private val completionDao: CompletionDao,
-    private val ledgerEntryDao: LedgerEntryDao,
-    private val dropRecordDao: DropRecordDao
+    private val database: AppDatabase
 ) : RewardTransactionRunner {
 
     override suspend fun <T> inTransaction(block: suspend RewardTransactionScope.() -> T): T =
         database.withTransaction {
             RoomRewardTransactionScope(
-                habitDao = habitDao,
-                completionDao = completionDao,
-                ledgerEntryDao = ledgerEntryDao,
-                dropRecordDao = dropRecordDao
+                habitDao = database.habitDao(),
+                completionDao = database.completionDao(),
+                ledgerEntryDao = database.ledgerEntryDao(),
+                dropRecordDao = database.dropRecordDao()
             ).block()
         }
 }
