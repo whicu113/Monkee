@@ -62,7 +62,7 @@ class HabitRewardCalculatorTest {
     }
 
     @Test
-    fun `caps limit entitlement delta and never make grant negative`() {
+    fun `Seeds cap limits grant without capping habit XP`() {
         data class Row(val name: String, val earned: Int, val expected: Int)
         val rows = listOf(Row("remaining room", 295, 5), Row("at cap", 300, 0), Row("over cap", 305, 0))
         rows.forEach { row ->
@@ -71,8 +71,17 @@ class HabitRewardCalculatorTest {
                 FixedRewardRandom(99, 99), 0
             )
             assertEquals("${row.name}: Seeds", row.expected, result.seedsGranted)
-            assertEquals("${row.name}: XP cap", 1, result.xpGranted)
+            assertEquals("${row.name}: uncapped habit XP", 10, result.xpGranted)
         }
+    }
+
+    @Test
+    fun `habit XP remains uncapped after the focus XP cap`() {
+        val result = calculateHabitReward(
+            CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0, 150,
+            FixedRewardRandom(99, 99), 0
+        )
+        assertEquals("habit XP row after focus cap", 10, result.xpGranted)
     }
 
     @Test

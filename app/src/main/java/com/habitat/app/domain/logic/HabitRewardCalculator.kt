@@ -60,6 +60,7 @@ fun calculateHabitReward(
     rng: RewardRandom,
     pityCounter: Int
 ): RewardCalculation {
+    require(xpEarnedToday >= 0) { "Habit XP earned today cannot be negative" }
     if (state == CompletionState.SKIPPED) {
         return RewardCalculation(0, 0, null, pityCounter.coerceAtLeast(0), null)
     }
@@ -82,14 +83,13 @@ fun calculateHabitReward(
     val seedDelta = (currentEntitlement.seeds - previousEntitlement.seeds).coerceAtLeast(0)
     val xpDelta = (currentEntitlement.xp - previousEntitlement.xp).coerceAtLeast(0)
     val seedsRoom = (GameConfig.DAILY_HABIT_SEEDS_CAP - seedsEarnedToday).coerceAtLeast(0)
-    val xpRoom = (GameConfig.DAILY_HABIT_XP_CAP - xpEarnedToday).coerceAtLeast(0)
 
     val drop = if (state == CompletionState.DONE) rollDrop(rng, normalizedPity) else null
     val pityAfter = if (drop == null && state == CompletionState.DONE) normalizedPity + 1
     else if (drop != null) 0 else normalizedPity
 
     val seedsGranted = minOf(seedDelta, seedsRoom)
-    val xpGranted = minOf(xpDelta, xpRoom)
+    val xpGranted = xpDelta
     return RewardCalculation(
         seedsGranted = seedsGranted,
         xpGranted = xpGranted,

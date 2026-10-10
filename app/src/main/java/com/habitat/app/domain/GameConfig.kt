@@ -11,9 +11,6 @@ object GameConfig {
     /** Maximum allowed habit seeds per logical day. SPEC 6.3 */
     const val DAILY_HABIT_SEEDS_CAP: Int = 300
 
-    /** Maximum allowed habit XP per logical day. SPEC Section 6.3. */
-    const val DAILY_HABIT_XP_CAP: Int = 150
-
     const val HABIT_SEEDS_BASE: Int = 10
     const val MINIMUM_SEEDS_FACTOR: Double = 0.6
     const val DONE_SEEDS_FACTOR: Double = 1.0
