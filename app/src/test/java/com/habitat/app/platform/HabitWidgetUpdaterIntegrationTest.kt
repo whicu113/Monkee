@@ -18,13 +18,27 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Test
 import java.time.Instant
 import java.time.ZoneId
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HabitWidgetUpdaterIntegrationTest {
+    private lateinit var originalAlarmGateway: AlarmGateway
+
+    @Before
+    fun saveAlarmGateway() {
+        originalAlarmGateway = ReminderScheduler.alarmGateway
+    }
+
+    @After
+    fun restoreAlarmGateway() {
+        ReminderScheduler.alarmGateway = originalAlarmGateway
+    }
+
     @Test
     fun `habit save remains successful when widget refresh throws for row`() = runTest {
         val testDispatcher = StandardTestDispatcher(testScheduler)
