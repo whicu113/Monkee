@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Habitat</string>
     <string name="snooze_action">Snooze (%1$dm)</string>
+    <string name="habit_widget_description">Track today\'s habits and check them off directly from your home screen.</string>
 </resources>

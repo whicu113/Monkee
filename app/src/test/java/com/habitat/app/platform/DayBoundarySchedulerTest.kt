@@ -124,6 +124,55 @@ class DayBoundarySchedulerTest {
     }
 
     @Test
+    fun `BootReceiver handles TIMEZONE_CHANGED for day-boundary alarm`() = runTest {
+        val habitRepo = FakeHabitRepository()
+        val completionRepo = CompletionRepositoryImpl(FakeCompletionDao())
+
+        // Initial state: alarm cleared
+        fakeAlarmGateway.cancelDayBoundaryAlarm(DummyContext())
+
+        // Device changes timezone to America/New_York (UTC-4 in May) at 02:00 EDT
+        val nyZone = ZoneId.of("America/New_York")
+        val nyClock = object : AppClock {
+            override fun instant(): Instant = ZonedDateTime.parse("2025-05-12T02:00:00-04:00").toInstant()
+            override fun zoneId(): ZoneId = nyZone
+        }
+
+        val bootReceiver = BootReceiver().apply {
+            this.habitRepository = habitRepo
+            this.completionRepository = completionRepo
+            this.settingsRepository = fakeSettingsRepo
+            this.clock = nyClock
+        }
+
+        bootReceiver.handleAction(DummyContext(), Intent.ACTION_TIMEZONE_CHANGED)
+
+        // Boundary alarm re-armed for 04:00 EDT in America/New_York
+        assertTrue(fakeAlarmGateway.isDayBoundaryAlarmScheduled(DummyContext()))
+        val expectedMillis = ZonedDateTime.parse("2025-05-12T04:00:00-04:00").toInstant().toEpochMilli()
+        assertEquals(expectedMillis, fakeAlarmGateway.scheduledDayBoundaryMillis)
+    }
+
+    @Test
+    fun `BootReceiver ignores unrelated action`() = runTest {
+        val habitRepo = FakeHabitRepository()
+        val completionRepo = CompletionRepositoryImpl(FakeCompletionDao())
+        fakeAlarmGateway.cancelDayBoundaryAlarm(DummyContext())
+
+        val bootReceiver = BootReceiver().apply {
+            this.habitRepository = habitRepo
+            this.completionRepository = completionRepo
+            this.settingsRepository = fakeSettingsRepo
+            this.clock = this@DayBoundarySchedulerTest.clock
+        }
+
+        bootReceiver.handleAction(DummyContext(), "android.intent.action.AIRPLANE_MODE")
+
+        // Not scheduled because action was ignored
+        assertEquals(false, fakeAlarmGateway.isDayBoundaryAlarmScheduled(DummyContext()))
+    }
+
+    @Test
     fun `cancel day boundary alarm removes pending trigger`() {
         fakeAlarmGateway.scheduleDayBoundaryAlarm(DummyContext(), 12345L)
         assertTrue(DayBoundaryScheduler.isScheduled(DummyContext()))
@@ -132,3 +181,4 @@ class DayBoundarySchedulerTest {
         assertEquals(false, DayBoundaryScheduler.isScheduled(DummyContext()))
     }
 }
+

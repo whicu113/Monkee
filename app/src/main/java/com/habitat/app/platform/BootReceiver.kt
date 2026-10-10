@@ -52,6 +52,17 @@ class BootReceiver : BroadcastReceiver() {
         }
     }
 
+    suspend fun handleAction(context: Context, action: String?) {
+        if (
+            action == Intent.ACTION_BOOT_COMPLETED ||
+            action == Intent.ACTION_MY_PACKAGE_REPLACED ||
+            action == Intent.ACTION_TIME_CHANGED ||
+            action == Intent.ACTION_TIMEZONE_CHANGED
+        ) {
+            reconcileAll(context)
+        }
+    }
+
     suspend fun reconcileAll(context: Context) {
         ReminderScheduler.reconcile(
             context = context,
