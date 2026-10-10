@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 
 @Dao
@@ -57,6 +58,12 @@ interface LedgerEntryDao {
     @Query("SELECT COALESCE(SUM(delta), 0) FROM ledger_entries WHERE currency = :currency")
     suspend fun balanceForCurrency(currency: String): Long
 
+    @Query("SELECT COALESCE(SUM(delta), 0) FROM ledger_entries WHERE currency = :currency")
+    fun observeBalanceForCurrency(currency: String): Flow<Long>
+
     @Query("SELECT COALESCE(SUM(delta), 0) FROM ledger_entries WHERE currency = 'XP'")
     suspend fun totalXp(): Long
+
+    @Query("SELECT COALESCE(SUM(delta), 0) FROM ledger_entries WHERE currency = 'XP'")
+    fun observeTotalXp(): Flow<Long>
 }
