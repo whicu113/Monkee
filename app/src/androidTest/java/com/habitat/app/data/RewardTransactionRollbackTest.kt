@@ -49,6 +49,7 @@ class RewardTransactionRollbackTest {
 
     @Test
     fun completionAndRewardsRollbackWhenDropRecordInsertFails() = runBlocking {
+        // The failure below comes from the unique (habitId, logicalDate) index, not a trigger.
         database.dropRecordDao().insert(
             DropRecordEntity(
                 id = "existing-drop",
