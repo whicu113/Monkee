@@ -44,17 +44,26 @@ class BootReceiver : BroadcastReceiver() {
             val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    ReminderScheduler.reconcile(
-                        context = context,
-                        habitRepository = habitRepository,
-                        completionRepository = completionRepository,
-                        settingsRepository = settingsRepository,
-                        clock = clock
-                    )
+                    reconcileAll(context)
                 } finally {
-                    pendingResult.finish()
+                    pendingResult?.finish()
                 }
             }
         }
+    }
+
+    suspend fun reconcileAll(context: Context) {
+        ReminderScheduler.reconcile(
+            context = context,
+            habitRepository = habitRepository,
+            completionRepository = completionRepository,
+            settingsRepository = settingsRepository,
+            clock = clock
+        )
+        DayBoundaryScheduler.scheduleNext(
+            context = context,
+            settingsRepository = settingsRepository,
+            clock = clock
+        )
     }
 }

@@ -37,6 +37,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".platform.DayBoundaryReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".platform.BootReceiver"
             android:exported="true">
             <intent-filter>

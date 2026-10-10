@@ -8,11 +8,13 @@ import com.habitat.app.domain.model.AppSettings
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
 import com.habitat.app.domain.repository.SettingsRepository
+import com.habitat.app.platform.DayBoundaryScheduler
 import com.habitat.app.platform.ReminderScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -35,9 +37,14 @@ class SettingsViewModel @Inject constructor(
 
     fun updateSettings(newSettings: AppSettings) {
         viewModelScope.launch {
+            val oldSettings = settingsRepository.getSettings().first()
             settingsRepository.updateSettings(newSettings)
             // Reconcile reminders when quiet hours or settings change
             ReminderScheduler.reconcile(context, habitRepository, completionRepository, settingsRepository, clock)
+            // Re-arm day boundary when dayBoundaryHour changes in Settings
+            if (oldSettings.dayBoundaryHour != newSettings.dayBoundaryHour) {
+                DayBoundaryScheduler.scheduleNext(context, settingsRepository, clock)
+            }
         }
     }
 }

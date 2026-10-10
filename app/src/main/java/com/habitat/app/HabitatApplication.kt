@@ -5,6 +5,7 @@ import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
 import com.habitat.app.domain.repository.SettingsRepository
+import com.habitat.app.platform.DayBoundaryScheduler
 import com.habitat.app.platform.NotificationHelper
 import com.habitat.app.platform.ReminderScheduler
 import dagger.hilt.android.HiltAndroidApp
@@ -36,6 +37,13 @@ class HabitatApplication : Application() {
             context = this,
             habitRepository = habitRepository,
             completionRepository = completionRepository,
+            settingsRepository = settingsRepository,
+            clock = clock
+        )
+
+        // Arm the day boundary alarm at app startup
+        DayBoundaryScheduler.scheduleNextAsync(
+            context = this,
             settingsRepository = settingsRepository,
             clock = clock
         )

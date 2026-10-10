@@ -80,6 +80,7 @@ class ReminderSchedulerWiringTest {
 
 class FakeAlarmGateway : AlarmGateway {
     val scheduledAlarms = mutableMapOf<String, Long>()
+    var scheduledDayBoundaryMillis: Long? = null
 
     override fun scheduleAlarm(context: Context, habitId: String, actionPath: String, triggerAtMillis: Long, logicalDateExtra: String?) {
         scheduledAlarms["$habitId:$actionPath"] = triggerAtMillis
@@ -91,6 +92,18 @@ class FakeAlarmGateway : AlarmGateway {
 
     override fun isAlarmScheduled(context: Context, habitId: String, actionPath: String): Boolean {
         return scheduledAlarms.containsKey("$habitId:$actionPath")
+    }
+
+    override fun scheduleDayBoundaryAlarm(context: Context, triggerAtMillis: Long) {
+        scheduledDayBoundaryMillis = triggerAtMillis
+    }
+
+    override fun cancelDayBoundaryAlarm(context: Context) {
+        scheduledDayBoundaryMillis = null
+    }
+
+    override fun isDayBoundaryAlarmScheduled(context: Context): Boolean {
+        return scheduledDayBoundaryMillis != null
     }
 }
 
