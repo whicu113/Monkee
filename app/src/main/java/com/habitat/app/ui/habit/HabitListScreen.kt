@@ -37,6 +37,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -52,10 +53,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.habitat.app.BuildConfig
+import com.habitat.app.R
 import com.habitat.app.domain.model.CompletionState
 import com.habitat.app.domain.model.Habit
 import com.habitat.app.domain.model.ScheduleType
@@ -85,29 +92,32 @@ fun HabitListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Habitat") },
-                actions = {
-                    uiState.overallConsistency?.let { score ->
-                        Text(
-                            text = "Consistency: ${(score * 100).roundToInt()}%",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                    }
+            Column {
+                TopAppBar(
+                    title = { Text("Habitat") },
+                    actions = {
+                        uiState.overallConsistency?.let { score ->
+                            Text(
+                                text = "Consistency: ${(score * 100).roundToInt()}%",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                        }
 
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        IconButton(onClick = { showPermissionRationale = true }) {
-                            Icon(Icons.Default.Notifications, contentDescription = "Enable Notifications")
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            IconButton(onClick = { showPermissionRationale = true }) {
+                                Icon(Icons.Default.Notifications, contentDescription = "Enable Notifications")
+                            }
+                        }
+
+                        IconButton(onClick = onNavigateToSettings) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
                     }
-
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
-                    }
-                }
-            )
+                )
+                PlayerEconomyHeader(uiState)
+            }
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showCreateDialog = true }) {
@@ -316,6 +326,65 @@ fun HabitListScreen(
                 }
             )
         }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+private fun PlayerEconomyHeader(uiState: HabitListUiState) {
+    val seedsDescription = stringResource(R.string.player_seeds_content_description, uiState.seedsBalance)
+    val levelDescription = stringResource(R.string.player_level_content_description, uiState.level)
+    val xpDescription = stringResource(
+        R.string.player_xp_content_description,
+        uiState.xpIntoLevel,
+        uiState.xpRequiredForNextLevel,
+        uiState.level
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.player_seeds_balance, uiState.seedsBalance),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.semantics { contentDescription = seedsDescription }
+            )
+            Text(
+                text = stringResource(R.string.player_level, uiState.level),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.semantics { contentDescription = levelDescription }
+            )
+            Text(
+                text = stringResource(
+                    R.string.player_xp_progress,
+                    uiState.xpIntoLevel,
+                    uiState.xpRequiredForNextLevel
+                ),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        LinearProgressIndicator(
+            progress = uiState.xpProgressFraction,
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics {
+                    contentDescription = xpDescription
+                    progressBarRangeInfo = ProgressBarRangeInfo(uiState.xpProgressFraction, 0f..1f)
+                },
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
     }
 }
 

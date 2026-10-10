@@ -2,4 +2,10 @@
     <string name="app_name">Habitat</string>
     <string name="snooze_action">Snooze (%1$dm)</string>
     <string name="habit_widget_description">Track today\'s habits and check them off directly from your home screen.</string>
+    <string name="player_seeds_balance">%1$d Seeds</string>
+    <string name="player_level">Level %1$d</string>
+    <string name="player_xp_progress">%1$d / %2$d XP</string>
+    <string name="player_seeds_content_description">Seeds balance: %1$d</string>
+    <string name="player_level_content_description">Level %1$d</string>
+    <string name="player_xp_content_description">XP progress: %1$d of %2$d at level %3$d</string>
 </resources>
