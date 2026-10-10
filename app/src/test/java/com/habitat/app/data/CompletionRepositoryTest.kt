@@ -81,6 +81,10 @@ class FakeCompletionDao : CompletionDao {
         }
     }
 
+    override suspend fun getCompletionsForHabitOnce(habitId: String): List<CompletionEntity> {
+        return completionsState.value.values.filter { it.habitId == habitId }.sortedBy { it.logicalDate }
+    }
+
     override suspend fun insertOrUpdate(completion: CompletionEntity): Long {
         val key = Pair(completion.habitId, completion.logicalDate)
         completionsState.value = completionsState.value + (key to completion)

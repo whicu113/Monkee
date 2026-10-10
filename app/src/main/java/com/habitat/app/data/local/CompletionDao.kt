@@ -17,6 +17,9 @@ interface CompletionDao {
     @Query("SELECT * FROM completions WHERE habitId = :habitId ORDER BY logicalDate ASC")
     fun getCompletionsForHabit(habitId: String): Flow<List<CompletionEntity>>
 
+    @Query("SELECT * FROM completions WHERE habitId = :habitId ORDER BY logicalDate ASC")
+    suspend fun getCompletionsForHabitOnce(habitId: String): List<CompletionEntity>
+
     @Query("SELECT * FROM completions ORDER BY logicalDate ASC")
     fun getAllCompletions(): Flow<List<CompletionEntity>>
 
