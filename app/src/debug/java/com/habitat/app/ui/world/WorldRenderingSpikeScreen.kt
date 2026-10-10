@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -50,8 +53,8 @@ import kotlin.math.sin
 internal const val WORLD_SPIKE_COLUMNS = 20
 internal const val WORLD_SPIKE_ROWS = 10
 internal const val WORLD_SPIKE_TILE_COUNT = WORLD_SPIKE_COLUMNS * WORLD_SPIKE_ROWS
-internal const val WORLD_SPIKE_TILE_WIDTH_DP = 24f
-internal const val WORLD_SPIKE_TILE_HEIGHT_DP = 12f
+internal const val WORLD_SPIKE_TILE_WIDTH_DP = 22f
+internal const val WORLD_SPIKE_TILE_HEIGHT_DP = 11f
 
 internal data class WorldSpikeTile(
     val id: Int,
@@ -180,6 +183,7 @@ internal fun WorldRenderingSpikeScreen(initialRenderer: WorldSpikeRenderer) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
