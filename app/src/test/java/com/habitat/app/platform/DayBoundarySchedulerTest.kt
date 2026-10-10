@@ -154,6 +154,25 @@ class DayBoundarySchedulerTest {
     }
 
     @Test
+    fun `day-boundary alarm is re-armed when reminder reconciliation throws`() = runTest {
+        val bootReceiver = BootReceiver()
+        val throwingReminderReconciler: suspend () -> Unit = {
+            throw IllegalStateException("Reminder scheduling failed")
+        }
+
+        bootReceiver.reconcileAll(
+            reminderReconcile = throwingReminderReconciler,
+            dayBoundaryRearm = {
+                DayBoundaryScheduler.scheduleNext(DummyContext(), fakeSettingsRepo, clock)
+            }
+        )
+
+        assertTrue(fakeAlarmGateway.isDayBoundaryAlarmScheduled(DummyContext()))
+        val expectedMillis = ZonedDateTime.parse("2025-05-12T04:00:00+02:00").toInstant().toEpochMilli()
+        assertEquals(expectedMillis, fakeAlarmGateway.scheduledDayBoundaryMillis)
+    }
+
+    @Test
     fun `BootReceiver ignores unrelated action`() = runTest {
         val habitRepo = FakeHabitRepository()
         val completionRepo = CompletionRepositoryImpl(FakeCompletionDao())

@@ -3,6 +3,7 @@ package com.habitat.app.platform
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
@@ -64,17 +65,44 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     suspend fun reconcileAll(context: Context) {
-        ReminderScheduler.reconcile(
-            context = context,
-            habitRepository = habitRepository,
-            completionRepository = completionRepository,
-            settingsRepository = settingsRepository,
-            clock = clock
+        reconcileAll(
+            reminderReconcile = {
+                ReminderScheduler.reconcile(
+                    context = context,
+                    habitRepository = habitRepository,
+                    completionRepository = completionRepository,
+                    settingsRepository = settingsRepository,
+                    clock = clock
+                )
+            },
+            dayBoundaryRearm = {
+                DayBoundaryScheduler.scheduleNext(
+                    context = context,
+                    settingsRepository = settingsRepository,
+                    clock = clock
+                )
+            }
         )
-        DayBoundaryScheduler.scheduleNext(
-            context = context,
-            settingsRepository = settingsRepository,
-            clock = clock
-        )
+    }
+
+    internal suspend fun reconcileAll(
+        reminderReconcile: suspend () -> Unit,
+        dayBoundaryRearm: suspend () -> Unit
+    ) {
+        try {
+            reminderReconcile()
+        } catch (exception: Exception) {
+            Log.e(TAG, "Failed to reconcile reminder alarms", exception)
+        }
+
+        try {
+            dayBoundaryRearm()
+        } catch (exception: Exception) {
+            Log.e(TAG, "Failed to re-arm day-boundary alarm", exception)
+        }
+    }
+
+    private companion object {
+        const val TAG = "BootReceiver"
     }
 }
