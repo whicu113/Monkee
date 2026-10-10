@@ -402,4 +402,54 @@ class ReminderEngineTest {
         assertEquals("b", (allocations[1] as ReminderAllocation.Individual).habit.id)
         assertEquals("a", (allocations[2] as ReminderAllocation.Individual).habit.id)
     }
+
+    @Test
+    fun `evaluateFireTimeDecision cap reached precedence table test`() {
+        data class TestCase(
+            val description: String,
+            val isLoggedToday: Boolean,
+            val expectedDecision: FireDecision
+        )
+
+        val habit = Habit(
+            id = "test-habit",
+            name = "Test Habit",
+            schedule = ScheduleType.Daily,
+            reminderTime = LocalTime.of(12, 0)
+        )
+        val date = LocalDate.of(2025, 5, 12)
+        val scheduledInstant = Instant.parse("2025-05-12T12:00:00Z")
+        val nowInstant = scheduledInstant.plusSeconds(60)
+        val capReachedPostedIds = setOf("p1", "p2", "p3", "p4") // size 4 >= 4 cap
+
+        val testCases = listOf(
+            TestCase(
+                description = "Cap reached and habit logged -> Drop(AlreadyLogged), not Summary",
+                isLoggedToday = true,
+                expectedDecision = FireDecision.Drop(DropReason.AlreadyLogged)
+            ),
+            TestCase(
+                description = "Cap reached and habit not logged -> Summary",
+                isLoggedToday = false,
+                expectedDecision = FireDecision.Summary(habit)
+            )
+        )
+
+        for (tc in testCases) {
+            val decision = ReminderEngine.evaluateFireTimeDecision(
+                habit = habit,
+                scheduledInstant = scheduledInstant,
+                nowInstant = nowInstant,
+                zoneId = zoneUtc,
+                quietHoursEnabled = false,
+                quietHoursStart = quietStart,
+                quietHoursEnd = quietEnd,
+                isLoggedToday = tc.isLoggedToday,
+                isWeeklyQuotaMet = false,
+                postedIdsToday = capReachedPostedIds,
+                currentLogicalDate = date
+            )
+            assertEquals(tc.description, tc.expectedDecision, decision)
+        }
+    }
 }
