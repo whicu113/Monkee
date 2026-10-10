@@ -260,6 +260,39 @@ class HabitRewardCalculatorTest {
         }
     }
 
+    @Test
+    fun `drop chance uses the exact five percent boundary and consumes rarity only on hit`() {
+        data class Row(
+            val name: String,
+            val chanceRoll: Int,
+            val expectedDrop: DropRarity?,
+            val expectedCallBounds: List<Int>
+        )
+        val rows = listOf(
+            Row("chance roll zero hits", 0, DropRarity.LEGENDARY, listOf(100, 100)),
+            Row("chance roll four hits", 4, DropRarity.LEGENDARY, listOf(100, 100)),
+            Row("chance roll five misses", 5, null, listOf(100)),
+            Row("chance roll ninety nine misses", 99, null, listOf(100))
+        )
+        val failures = mutableListOf<String>()
+
+        rows.forEach { row ->
+            val random = RecordingRewardRandom(listOf(row.chanceRoll, 99))
+            val result = calculateHabitReward(
+                CompletionState.DONE, Difficulty.EASY, 0, false, emptyMap(), 0,
+                random, 0
+            )
+            if (result.drop != row.expectedDrop) {
+                failures += "${row.name}: drop expected ${row.expectedDrop}, got ${result.drop}"
+            }
+            if (random.callBounds != row.expectedCallBounds) {
+                failures += "${row.name}: RNG calls expected bounds ${row.expectedCallBounds}, got ${random.callBounds}"
+            }
+        }
+
+        assertEquals("Drop chance boundary rows: ${failures.joinToString("; ")}", emptyList<String>(), failures)
+    }
+
     private class FixedRewardRandom(vararg values: Int) : com.habitat.app.domain.logic.RewardRandom {
         private val rolls = values.toList()
         private var index = 0
