@@ -1,6 +1,8 @@
 package com.habitat.app.data.local
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.withTransaction
+import com.habitat.app.domain.LedgerKeyConflictException
 import com.habitat.app.domain.RewardCompletionTransactionPort
 import com.habitat.app.domain.RewardDropRecord
 import com.habitat.app.domain.RewardDropTransactionPort
@@ -67,7 +69,14 @@ private class RoomRewardCompletionPort(private val dao: CompletionDao) : RewardC
 }
 
 private class RoomRewardLedgerPort(private val dao: LedgerEntryDao) : RewardLedgerTransactionPort {
-    override suspend fun insert(entry: RewardLedgerEntry): Long = dao.insert(entry.toEntity())
+    override suspend fun insert(entry: RewardLedgerEntry): Long = try {
+        dao.insert(entry.toEntity())
+    } catch (failure: SQLiteConstraintException) {
+        if (failure.isIdempotencyKeyConflict()) {
+            throw LedgerKeyConflictException(entry.idempotencyKey, failure)
+        }
+        throw failure
+    }
 
     override suspend fun sumPositiveHabitSeeds(logicalDate: LocalDate): Long =
         dao.sumPositiveHabitSeeds(logicalDate)
@@ -96,6 +105,11 @@ private class RoomRewardLedgerPort(private val dao: LedgerEntryDao) : RewardLedg
     override suspend fun balance(currency: RewardCurrency): Long = dao.balanceForCurrency(currency.name)
 
     override suspend fun totalXp(): Long = dao.totalXp()
+}
+
+private fun SQLiteConstraintException.isIdempotencyKeyConflict(): Boolean {
+    val reportedColumn = message.orEmpty().lowercase().replace("`", "")
+    return "ledger_entries.idempotencykey" in reportedColumn
 }
 
 private class RoomRewardDropPort(private val dao: DropRecordDao) : RewardDropTransactionPort {

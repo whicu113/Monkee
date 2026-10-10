@@ -57,6 +57,11 @@ enum class LedgerReason {
     HABIT_REWARD
 }
 
+class LedgerKeyConflictException(
+    val idempotencyKey: String,
+    cause: Throwable
+) : IllegalStateException("Ledger idempotency key already exists", cause)
+
 data class RewardLedgerEntry(
     val id: Long = 0,
     val currency: RewardCurrency,
