@@ -174,14 +174,14 @@ fun HabitListScreen(
                             OutlinedButton(onClick = { viewModel.shiftDebugTime(days = 0, hours = 1) }) {
                                 Text("+1h", fontSize = 10.sp)
                             }
-                            Button(onClick = { viewModel.resetDebugTime() }) {
+                            OutlinedButton(onClick = { viewModel.resetDebugTime() }) {
                                 Text("Reset", fontSize = 10.sp)
                             }
-                            Button(onClick = { viewModel.reconcileNow() }) {
+                            OutlinedButton(onClick = { viewModel.reconcileNow() }) {
                                 Text("Reconcile", fontSize = 10.sp)
                             }
-                            Button(onClick = { viewModel.fireRemindersNow(forcePost = false) }) {
-                                Text("Fire reminders now", fontSize = 10.sp)
+                            OutlinedButton(onClick = { viewModel.fireRemindersNow(forcePost = false) }) {
+                                Text("Check reminders (dry run)", fontSize = 10.sp)
                             }
                             OutlinedButton(onClick = { viewModel.fireRemindersNow(forcePost = true) }) {
                                 Text("Force post", fontSize = 10.sp)
