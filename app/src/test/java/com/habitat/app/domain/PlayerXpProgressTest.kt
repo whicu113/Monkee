@@ -22,17 +22,23 @@ class PlayerXpProgressTest {
             Row("225 XP at level three", 225L, 3L, 0L, 150L)
         )
 
+        val failures = mutableListOf<String>()
         rows.forEach { row ->
             val progress = playerXpProgress(row.totalXp)
-            assertEquals("${row.name}: level", row.level, progress.level)
-            assertEquals("${row.name}: XP into level", row.xpIntoLevel, progress.xpIntoLevel)
-            assertEquals("${row.name}: XP required", row.xpRequired, progress.xpRequiredForNextLevel)
-            assertEquals(
-                "${row.name}: progress fraction",
-                row.xpIntoLevel.toFloat() / row.xpRequired,
-                progress.fraction,
-                0.0001f
-            )
+            if (row.level != progress.level) {
+                failures += "${row.name}: level expected:<${row.level}> but was:<${progress.level}>"
+            }
+            if (row.xpIntoLevel != progress.xpIntoLevel) {
+                failures += "${row.name}: XP into level expected:<${row.xpIntoLevel}> but was:<${progress.xpIntoLevel}>"
+            }
+            if (row.xpRequired != progress.xpRequiredForNextLevel) {
+                failures += "${row.name}: XP required expected:<${row.xpRequired}> but was:<${progress.xpRequiredForNextLevel}>"
+            }
+            val expectedFraction = row.xpIntoLevel.toFloat() / row.xpRequired
+            if (kotlin.math.abs(expectedFraction - progress.fraction) > 0.0001f) {
+                failures += "${row.name}: progress fraction expected:<$expectedFraction> but was:<${progress.fraction}>"
+            }
         }
+        assertEquals("all XP progress rows", emptyList<String>(), failures)
     }
 }

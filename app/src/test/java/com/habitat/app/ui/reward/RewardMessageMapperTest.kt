@@ -93,8 +93,13 @@ class RewardMessageMapperTest {
             )
         )
 
+        val failures = mutableListOf<String>()
         rows.forEach { row ->
-            assertEquals("${row.name}: mapped messages", row.expected, mapRewardResultToMessages(row.result))
+            val actual = mapRewardResultToMessages(row.result)
+            if (row.expected != actual) {
+                failures += "${row.name}: mapped messages expected:<${row.expected}> but was:<$actual>"
+            }
         }
+        assertEquals("all reward message rows", emptyList<String>(), failures)
     }
 }
