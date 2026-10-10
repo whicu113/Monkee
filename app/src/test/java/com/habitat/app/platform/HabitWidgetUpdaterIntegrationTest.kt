@@ -6,6 +6,7 @@ import com.habitat.app.domain.AppClock
 import com.habitat.app.domain.WidgetUpdater
 import com.habitat.app.domain.createLogCompletionUseCaseFixture
 import com.habitat.app.domain.model.Habit
+import com.habitat.app.domain.repository.PlayerEconomyRepository
 import com.habitat.app.domain.usecase.LogCompletionUseCase
 import com.habitat.app.domain.FakeCompletionReminderHandler
 import com.habitat.app.ui.habit.HabitViewModel
@@ -15,6 +16,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -43,7 +45,11 @@ class HabitWidgetUpdaterIntegrationTest {
             logCompletionUseCase = createLogCompletionUseCaseFixture(completions, clock, FakeCompletionReminderHandler()),
             reminderFulfillmentHandler = ReminderFulfillmentHandler(habits, completions, settings, clock),
             clock = clock,
-            widgetUpdater = WidgetUpdater { throw IllegalStateException("provider unavailable") }
+            widgetUpdater = WidgetUpdater { throw IllegalStateException("provider unavailable") },
+            playerEconomyRepository = object : PlayerEconomyRepository {
+                override fun observeSeedsBalance() = flowOf(0L)
+                override fun observeXpTotal() = flowOf(0L)
+            }
         )
         val habit = Habit(id = "walk-id", name = "Morning walk")
 

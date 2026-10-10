@@ -35,7 +35,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -85,7 +84,7 @@ class HabitViewModel @Inject constructor(
     private val reminderFulfillmentHandler: ReminderFulfillmentHandler,
     private val clock: AppClock,
     private val widgetUpdater: WidgetUpdater,
-    private val playerEconomyRepository: PlayerEconomyRepository = EmptyPlayerEconomyRepository
+    private val playerEconomyRepository: PlayerEconomyRepository
 ) : ViewModel() {
 
     private val selectedDateFlow = MutableStateFlow<LocalDate?>(null)
@@ -314,9 +313,4 @@ class HabitViewModel @Inject constructor(
             debugFireResultFlow.value = "Cleared posted-ids for $today"
         }
     }
-}
-
-private object EmptyPlayerEconomyRepository : PlayerEconomyRepository {
-    override fun observeSeedsBalance() = flowOf(0L)
-    override fun observeXpTotal() = flowOf(0L)
 }
