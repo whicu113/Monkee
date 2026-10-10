@@ -1,11 +1,31 @@
 package com.habitat.app.data
 
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.habitat.app.data.repository.SettingsRepositoryImpl
+import com.habitat.app.domain.model.AppSettings
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class SettingsRepositoryTest {
+
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
+
+    @Test
+    fun `emptyDataStoreReturnsAppSettingsDefaults`() = runTest {
+        val dataStore = PreferenceDataStoreFactory.create(scope = backgroundScope) {
+            temporaryFolder.newFolder().resolve("settings.preferences_pb")
+        }
+        val repository = SettingsRepositoryImpl.withDataStore(dataStore)
+
+        assertEquals(AppSettings(), repository.getSettings().first())
+    }
 
     @Test
     fun `posted habit ids set maintains idempotency and pruning logic`() {
