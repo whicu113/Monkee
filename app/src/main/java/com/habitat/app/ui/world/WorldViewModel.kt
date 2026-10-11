@@ -10,13 +10,17 @@ import com.habitat.app.domain.model.BuildOperation
 import com.habitat.app.domain.model.BuildWorld
 import com.habitat.app.domain.model.BuiltInPlaceableCatalog
 import com.habitat.app.domain.model.PlacedWorldItem
+import com.habitat.app.domain.model.TileCoordinate
 import com.habitat.app.domain.repository.WorldRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -36,6 +40,9 @@ class WorldViewModel @Inject constructor(
 
     private val _buildModeState = MutableStateFlow<WorldBuildUiState>(WorldBuildUiState.Inactive)
     val buildModeState = _buildModeState.asStateFlow()
+
+    private val buildFeedbackChannel = Channel<WorldBuildFeedback>(Channel.BUFFERED)
+    val buildFeedback = buildFeedbackChannel.receiveAsFlow()
 
     private val buildCommandMutex = Mutex()
     private var loadJob: Job? = null
@@ -95,6 +102,67 @@ class WorldViewModel @Inject constructor(
         applyOperationLocked(operation)
     }
 
+    fun onCanvasTileTapped(coordinate: TileCoordinate, batchMode: Boolean) = launchBuildCommand {
+        val editing = currentIdleEditing() ?: return@launchBuildCommand
+        val itemAtTile = hitTestPlacedWorldItem(
+            coordinate = coordinate,
+            renderModel = worldRenderModelFor(editing.session.world)
+        )
+        when (editing.activeTool) {
+            WorldBuildTool.PLACE -> {
+                if (itemAtTile != null) {
+                    _buildModeState.value = editing.copy(selectedItemId = itemAtTile.id)
+                    return@launchBuildCommand
+                }
+                val definitionId = editing.selectedDefinitionId
+                if (definitionId == null) {
+                    buildFeedbackChannel.trySend(WorldBuildFeedback.NO_CHANGE)
+                    return@launchBuildCommand
+                }
+                val item = PlacedWorldItem(
+                    id = UUID.randomUUID().toString(),
+                    definitionId = definitionId,
+                    anchor = coordinate
+                )
+                if (batchMode) {
+                    _buildModeState.value = editing.copy(queuedPlacements = editing.queuedPlacements + item)
+                } else {
+                    applyOperationLocked(BuildOperation.Place(item))
+                }
+            }
+
+            WorldBuildTool.MOVE -> {
+                val selectedItemId = editing.selectedItemId
+                if (selectedItemId == null) {
+                    if (itemAtTile != null) _buildModeState.value = editing.copy(selectedItemId = itemAtTile.id)
+                    else buildFeedbackChannel.trySend(WorldBuildFeedback.NO_CHANGE)
+                } else {
+                    applyOperationLocked(BuildOperation.Move(selectedItemId, coordinate))
+                }
+            }
+
+            WorldBuildTool.ROTATE -> {
+                val targetId = itemAtTile?.id ?: editing.selectedItemId
+                if (targetId == null) buildFeedbackChannel.trySend(WorldBuildFeedback.NO_CHANGE)
+                else {
+                    _buildModeState.value = editing.copy(selectedItemId = targetId)
+                    applyOperationLocked(BuildOperation.RotateClockwise(targetId))
+                }
+            }
+
+            WorldBuildTool.FLIP -> {
+                val targetId = itemAtTile?.id ?: editing.selectedItemId
+                if (targetId == null) buildFeedbackChannel.trySend(WorldBuildFeedback.NO_CHANGE)
+                else {
+                    _buildModeState.value = editing.copy(selectedItemId = targetId)
+                    applyOperationLocked(BuildOperation.FlipHorizontal(targetId))
+                }
+            }
+
+            WorldBuildTool.ERASER -> applyOperationLocked(BuildOperation.Erase(coordinate))
+        }
+    }
+
     fun applyQueuedPlacements() = launchBuildCommand {
         val editing = currentIdleEditing() ?: return@launchBuildCommand
         if (editing.queuedPlacements.isEmpty()) return@launchBuildCommand
@@ -112,7 +180,7 @@ class WorldViewModel @Inject constructor(
     fun undoBuild() = launchBuildCommand {
         val editing = currentIdleEditing() ?: return@launchBuildCommand
         when (val result = editing.session.undo()) {
-            is BuildModeHistoryResult.NoOp -> Unit
+            is BuildModeHistoryResult.NoOp -> buildFeedbackChannel.trySend(WorldBuildFeedback.NO_CHANGE)
             is BuildModeHistoryResult.Changed -> saveCandidateLocked(
                 editing = editing,
                 command = WorldBuildSaveCommand.Undo,
@@ -125,7 +193,7 @@ class WorldViewModel @Inject constructor(
     fun redoBuild() = launchBuildCommand {
         val editing = currentIdleEditing() ?: return@launchBuildCommand
         when (val result = editing.session.redo()) {
-            is BuildModeHistoryResult.NoOp -> Unit
+            is BuildModeHistoryResult.NoOp -> buildFeedbackChannel.trySend(WorldBuildFeedback.NO_CHANGE)
             is BuildModeHistoryResult.Changed -> saveCandidateLocked(
                 editing = editing,
                 command = WorldBuildSaveCommand.Redo,
@@ -174,8 +242,8 @@ class WorldViewModel @Inject constructor(
     ) {
         val editing = currentIdleEditing() ?: return
         when (val result = editing.session.apply(operation, BuiltInPlaceableCatalog.definitions)) {
-            is BuildModeSessionResult.NoOp,
-            is BuildModeSessionResult.Rejected -> Unit
+            is BuildModeSessionResult.NoOp -> buildFeedbackChannel.trySend(WorldBuildFeedback.NO_CHANGE)
+            is BuildModeSessionResult.Rejected -> buildFeedbackChannel.trySend(WorldBuildFeedback.EDIT_REJECTED)
             is BuildModeSessionResult.Applied -> saveCandidateLocked(
                 editing = editing,
                 command = WorldBuildSaveCommand.Edit(operation),

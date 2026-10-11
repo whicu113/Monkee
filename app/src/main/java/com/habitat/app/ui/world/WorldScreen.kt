@@ -1,10 +1,12 @@
 package com.habitat.app.ui.world
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -15,16 +17,25 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -32,12 +43,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.habitat.app.R
+import com.habitat.app.domain.logic.WorldPoint
 import com.habitat.app.domain.logic.projectWorldTiles
 import com.habitat.app.domain.model.BuiltInPlaceableCatalog
 import com.habitat.app.domain.model.TileCoordinate
 import com.habitat.app.domain.model.WorldTerrain
 import com.habitat.app.domain.model.createStarterIsland
 import com.habitat.app.ui.theme.MonkeeTheme
+import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,11 +61,53 @@ fun WorldScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val renderModel by viewModel.renderModel.collectAsStateWithLifecycle()
+    val buildModeState by viewModel.buildModeState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var batchMode by remember { mutableStateOf(false) }
+
+    val rejectedMessage = stringResource(R.string.world_build_edit_rejected)
+    val noChangeMessage = stringResource(R.string.world_build_no_change)
+    LaunchedEffect(viewModel, snackbarHostState, rejectedMessage, noChangeMessage) {
+        viewModel.buildFeedback.collectLatest { feedback ->
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(
+                message = when (feedback) {
+                    WorldBuildFeedback.EDIT_REJECTED -> rejectedMessage
+                    WorldBuildFeedback.NO_CHANGE -> noChangeMessage
+                },
+                duration = SnackbarDuration.Short
+            )
+        }
+    }
+    LaunchedEffect(buildModeState is WorldBuildUiState.Editing) {
+        if (buildModeState !is WorldBuildUiState.Editing) batchMode = false
+    }
+
     WorldScreenContent(
         uiState = uiState,
         renderModel = renderModel,
-        onNavigateBack = onNavigateBack,
+        buildModeState = buildModeState,
+        batchMode = batchMode,
+        snackbarHostState = snackbarHostState,
+        onNavigateBack = {
+            if (buildModeState is WorldBuildUiState.Editing) {
+                viewModel.exitBuildMode()
+            } else {
+                onNavigateBack()
+            }
+        },
         onRetry = viewModel::retry,
+        onEnterBuild = viewModel::enterBuildMode,
+        onExitBuild = viewModel::exitBuildMode,
+        onSelectDefinition = viewModel::selectDefinition,
+        onSelectTool = viewModel::selectTool,
+        onToggleBatchMode = { batchMode = !batchMode },
+        onApplyBatch = viewModel::applyQueuedPlacements,
+        onCancelBatch = viewModel::cancelQueuedPlacements,
+        onUndo = viewModel::undoBuild,
+        onRedo = viewModel::redoBuild,
+        onRetryBuildSave = viewModel::retryBuildSave,
+        onCanvasTileTapped = { coordinate -> viewModel.onCanvasTileTapped(coordinate, batchMode) },
         modifier = modifier
     )
 }
@@ -62,12 +117,27 @@ fun WorldScreen(
 private fun WorldScreenContent(
     uiState: WorldUiState,
     renderModel: WorldRenderModel?,
+    buildModeState: WorldBuildUiState = WorldBuildUiState.Inactive,
+    batchMode: Boolean = false,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     onNavigateBack: () -> Unit,
     onRetry: () -> Unit,
+    onEnterBuild: () -> Unit = {},
+    onExitBuild: () -> Unit = {},
+    onSelectDefinition: (String) -> Unit = {},
+    onSelectTool: (WorldBuildTool) -> Unit = {},
+    onToggleBatchMode: () -> Unit = {},
+    onApplyBatch: () -> Unit = {},
+    onCancelBatch: () -> Unit = {},
+    onUndo: () -> Unit = {},
+    onRedo: () -> Unit = {},
+    onRetryBuildSave: () -> Unit = {},
+    onCanvasTileTapped: ((TileCoordinate) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.world_title)) },
@@ -77,6 +147,17 @@ private fun WorldScreenContent(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.world_back)
                         )
+                    }
+                },
+                actions = {
+                    if (buildModeState is WorldBuildUiState.Editing) {
+                        Button(onClick = onExitBuild) {
+                            Text(stringResource(R.string.world_build_exit))
+                        }
+                    } else if (uiState is WorldUiState.Content) {
+                        Button(onClick = onEnterBuild) {
+                            Text(stringResource(R.string.world_build_enter))
+                        }
                     }
                 }
             )
@@ -106,12 +187,45 @@ private fun WorldScreenContent(
                 }
             }
 
-            is WorldUiState.Content -> WorldIslandCanvas(
-                renderModel = renderModel ?: state.renderModel,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            )
+            is WorldUiState.Content -> {
+                val model = renderModel ?: state.renderModel
+                val editing = buildModeState as? WorldBuildUiState.Editing
+                if (editing == null) {
+                    WorldIslandCanvas(
+                        renderModel = model,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) {
+                        WorldBuildControls(
+                            editing = editing,
+                            batchMode = batchMode,
+                            onSelectDefinition = onSelectDefinition,
+                            onSelectTool = onSelectTool,
+                            onToggleBatchMode = onToggleBatchMode,
+                            onApplyBatch = onApplyBatch,
+                            onCancelBatch = onCancelBatch,
+                            onUndo = onUndo,
+                            onRedo = onRedo,
+                            onRetry = onRetryBuildSave
+                        )
+                        WorldIslandCanvas(
+                            renderModel = worldRenderModelFor(editing.session.world),
+                            selectedItemId = editing.selectedItemId,
+                            onTileTapped = onCanvasTileTapped,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -120,6 +234,7 @@ private fun WorldScreenContent(
 private fun WorldIslandCanvas(
     renderModel: WorldRenderModel,
     selectedItemId: String? = null,
+    onTileTapped: ((TileCoordinate) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val island = renderModel.island
@@ -136,9 +251,30 @@ private fun WorldIslandCanvas(
     val stoneColor = MaterialTheme.colorScheme.primary
     val logColor = MaterialTheme.colorScheme.secondary
     val selectionColor = MaterialTheme.colorScheme.tertiary
+    val currentOnTileTapped = rememberUpdatedState(onTileTapped)
+    val gestureModifier = if (onTileTapped == null) {
+        Modifier
+    } else {
+        Modifier.pointerInput(renderModel) {
+            detectTapGestures { position ->
+                val projectedTiles = projectWorldTiles(
+                    island = island,
+                    viewportWidth = size.width.toFloat(),
+                    viewportHeight = size.height.toFloat()
+                )
+                val coordinate = hitTestWorldTile(
+                    point = WorldPoint(position.x, position.y),
+                    projectedTiles = projectedTiles
+                )
+                if (coordinate != null) currentOnTileTapped.value?.invoke(coordinate)
+            }
+        }
+    }
 
     Canvas(
-        modifier = modifier.semantics { contentDescription = description }
+        modifier = modifier
+            .then(gestureModifier)
+            .semantics { contentDescription = description }
     ) {
         val projectedTiles = projectWorldTiles(island, size.width, size.height)
         val projectedByCoordinate = projectedTiles.associateBy { TileCoordinate(it.x, it.y) }

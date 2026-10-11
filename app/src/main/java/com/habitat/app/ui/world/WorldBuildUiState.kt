@@ -21,7 +21,14 @@ sealed interface WorldBuildUiState {
 enum class WorldBuildTool {
     PLACE,
     MOVE,
+    ROTATE,
+    FLIP,
     ERASER
+}
+
+enum class WorldBuildFeedback {
+    EDIT_REJECTED,
+    NO_CHANGE
 }
 
 sealed interface WorldBuildSaveStatus {
