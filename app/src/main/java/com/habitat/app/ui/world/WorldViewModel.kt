@@ -88,6 +88,16 @@ class WorldViewModel @Inject constructor(
         _buildModeState.value = editing.copy(selectedItemId = itemId)
     }
 
+    /** Selects an existing item and the move tool as one serialized UI command. */
+    fun selectItemForMove(itemId: String) = launchBuildCommand {
+        val editing = currentIdleEditing() ?: return@launchBuildCommand
+        if (editing.session.world.items.none { it.id == itemId }) return@launchBuildCommand
+        _buildModeState.value = editing.copy(
+            activeTool = WorldBuildTool.MOVE,
+            selectedItemId = itemId
+        )
+    }
+
     fun selectTool(tool: WorldBuildTool) = launchBuildCommand {
         val editing = currentIdleEditing() ?: return@launchBuildCommand
         _buildModeState.value = editing.copy(activeTool = tool)

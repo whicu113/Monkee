@@ -46,6 +46,7 @@ import com.habitat.app.R
 import com.habitat.app.domain.logic.WorldPoint
 import com.habitat.app.domain.logic.projectWorldTiles
 import com.habitat.app.domain.model.BuiltInPlaceableCatalog
+import com.habitat.app.domain.model.BuildOperation
 import com.habitat.app.domain.model.TileCoordinate
 import com.habitat.app.domain.model.WorldTerrain
 import com.habitat.app.domain.model.createStarterIsland
@@ -64,6 +65,7 @@ fun WorldScreen(
     val buildModeState by viewModel.buildModeState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var batchMode by remember { mutableStateOf(false) }
+    var contentMode by remember { mutableStateOf(WorldBuildContentMode.CANVAS) }
 
     val rejectedMessage = stringResource(R.string.world_build_edit_rejected)
     val noChangeMessage = stringResource(R.string.world_build_no_change)
@@ -80,7 +82,10 @@ fun WorldScreen(
         }
     }
     LaunchedEffect(buildModeState is WorldBuildUiState.Editing) {
-        if (buildModeState !is WorldBuildUiState.Editing) batchMode = false
+        if (buildModeState !is WorldBuildUiState.Editing) {
+            batchMode = false
+            contentMode = WorldBuildContentMode.CANVAS
+        }
     }
 
     WorldScreenContent(
@@ -88,6 +93,7 @@ fun WorldScreen(
         renderModel = renderModel,
         buildModeState = buildModeState,
         batchMode = batchMode,
+        contentMode = contentMode,
         snackbarHostState = snackbarHostState,
         onNavigateBack = {
             if (buildModeState is WorldBuildUiState.Editing) {
@@ -102,11 +108,16 @@ fun WorldScreen(
         onSelectDefinition = viewModel::selectDefinition,
         onSelectTool = viewModel::selectTool,
         onToggleBatchMode = { batchMode = !batchMode },
+        onSelectContentMode = { contentMode = it },
         onApplyBatch = viewModel::applyQueuedPlacements,
         onCancelBatch = viewModel::cancelQueuedPlacements,
         onUndo = viewModel::undoBuild,
         onRedo = viewModel::redoBuild,
         onRetryBuildSave = viewModel::retryBuildSave,
+        onMoveItem = { item -> viewModel.selectItemForMove(item.id) },
+        onRotateItem = { item -> viewModel.applyOperation(BuildOperation.RotateClockwise(item.id)) },
+        onFlipItem = { item -> viewModel.applyOperation(BuildOperation.FlipHorizontal(item.id)) },
+        onEraseItem = { item -> viewModel.applyOperation(BuildOperation.Erase(item.coordinate)) },
         onCanvasTileTapped = { coordinate -> viewModel.onCanvasTileTapped(coordinate, batchMode) },
         modifier = modifier
     )
@@ -119,6 +130,7 @@ private fun WorldScreenContent(
     renderModel: WorldRenderModel?,
     buildModeState: WorldBuildUiState = WorldBuildUiState.Inactive,
     batchMode: Boolean = false,
+    contentMode: WorldBuildContentMode = WorldBuildContentMode.CANVAS,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     onNavigateBack: () -> Unit,
     onRetry: () -> Unit,
@@ -127,11 +139,16 @@ private fun WorldScreenContent(
     onSelectDefinition: (String) -> Unit = {},
     onSelectTool: (WorldBuildTool) -> Unit = {},
     onToggleBatchMode: () -> Unit = {},
+    onSelectContentMode: (WorldBuildContentMode) -> Unit = {},
     onApplyBatch: () -> Unit = {},
     onCancelBatch: () -> Unit = {},
     onUndo: () -> Unit = {},
     onRedo: () -> Unit = {},
     onRetryBuildSave: () -> Unit = {},
+    onMoveItem: (AccessibleWorldItem) -> Unit = {},
+    onRotateItem: (AccessibleWorldItem) -> Unit = {},
+    onFlipItem: (AccessibleWorldItem) -> Unit = {},
+    onEraseItem: (AccessibleWorldItem) -> Unit = {},
     onCanvasTileTapped: ((TileCoordinate) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -215,14 +232,37 @@ private fun WorldScreenContent(
                             onRedo = onRedo,
                             onRetry = onRetryBuildSave
                         )
-                        WorldIslandCanvas(
-                            renderModel = worldRenderModelFor(editing.session.world),
-                            selectedItemId = editing.selectedItemId,
-                            onTileTapped = onCanvasTileTapped,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
+                        WorldBuildContentSelector(
+                            selected = contentMode,
+                            onSelect = onSelectContentMode
                         )
+                        when (contentMode) {
+                            WorldBuildContentMode.CANVAS -> WorldIslandCanvas(
+                                renderModel = worldRenderModelFor(editing.session.world),
+                                selectedItemId = editing.selectedItemId,
+                                onTileTapped = onCanvasTileTapped,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                            )
+
+                            WorldBuildContentMode.TILES -> WorldAccessibleTilePicker(
+                                tiles = accessibleWorldTiles(worldRenderModelFor(editing.session.world)),
+                                enabled = editing.saveStatus is WorldBuildSaveStatus.Idle,
+                                onTileSelected = { coordinate -> onCanvasTileTapped?.invoke(coordinate) },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            WorldBuildContentMode.ITEMS -> WorldAccessibleItemList(
+                                items = accessibleWorldItems(worldRenderModelFor(editing.session.world)),
+                                enabled = editing.saveStatus is WorldBuildSaveStatus.Idle,
+                                onMove = onMoveItem,
+                                onRotate = onRotateItem,
+                                onFlip = onFlipItem,
+                                onErase = onEraseItem,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
             }
