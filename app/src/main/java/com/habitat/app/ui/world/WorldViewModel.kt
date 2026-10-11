@@ -31,6 +31,9 @@ class WorldViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<WorldUiState>(WorldUiState.Loading)
     val uiState = _uiState.asStateFlow()
 
+    private val _renderModel = MutableStateFlow<WorldRenderModel?>(null)
+    val renderModel = _renderModel.asStateFlow()
+
     private val _buildModeState = MutableStateFlow<WorldBuildUiState>(WorldBuildUiState.Inactive)
     val buildModeState = _buildModeState.asStateFlow()
 
@@ -237,8 +240,9 @@ class WorldViewModel @Inject constructor(
             _uiState.value = WorldUiState.Loading
             try {
                 worldRepository.ensureStarterIsland()
-                worldRepository.observeStarterIsland().collect { island ->
-                    _uiState.value = worldUiStateFor(island)
+                worldRepository.observeStarterBuildWorld().collect { world ->
+                    _uiState.value = worldUiStateFor(world?.island)
+                    _renderModel.value = world?.let(::worldRenderModelFor)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
