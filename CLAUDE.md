@@ -2,6 +2,8 @@
 
 Read `SPEC.md` before doing anything. It is the source of truth for behavior. If code and spec disagree, ask which is right before changing either.
 
+For any work on the world (M7 and later: items, shop, regions, hearth, monuments, eggs, wonders), read WORLD_DESIGN.md first. It extends SPEC.md sections 6 and 7; where they differ, SPEC.md wins until it is updated.
+
 ## Project
 Habitat is an Android-first, local-first, gamified habit tracker written in Kotlin.
 
