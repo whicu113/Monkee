@@ -1,5 +1,6 @@
 package com.habitat.app.ui.world
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.habitat.app.domain.model.BuildModeHistoryResult
@@ -141,7 +142,8 @@ class WorldViewModel @Inject constructor(
         } catch (cancelled: CancellationException) {
             _buildModeState.value = editing.copy(saveStatus = WorldBuildSaveStatus.Failed(retry))
             throw cancelled
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
+            Log.e(TAG, "World save failed (${failure.javaClass.simpleName})")
             _buildModeState.value = editing.copy(saveStatus = WorldBuildSaveStatus.Failed(retry))
             return@launchBuildCommand
         }
@@ -198,7 +200,8 @@ class WorldViewModel @Inject constructor(
         } catch (cancelled: CancellationException) {
             _buildModeState.value = editing
             throw cancelled
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
+            Log.e(TAG, "World save failed (${failure.javaClass.simpleName})")
             _buildModeState.value = editing.copy(saveStatus = WorldBuildSaveStatus.Failed(retry))
             return
         }
@@ -223,6 +226,10 @@ class WorldViewModel @Inject constructor(
     private fun currentIdleEditing(): WorldBuildUiState.Editing? =
         (_buildModeState.value as? WorldBuildUiState.Editing)
             ?.takeIf { it.saveStatus == WorldBuildSaveStatus.Idle }
+
+    private companion object {
+        const val TAG = "WorldViewModel"
+    }
 
     private fun loadWorld() {
         loadJob?.cancel()
