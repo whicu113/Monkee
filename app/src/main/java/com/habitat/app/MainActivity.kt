@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -14,7 +15,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import com.habitat.app.platform.NotificationHelper
 import com.habitat.app.domain.WidgetUpdater
@@ -23,6 +26,8 @@ import com.habitat.app.ui.habit.HabitListScreen
 import com.habitat.app.ui.habit.HabitViewModel
 import com.habitat.app.ui.settings.SettingsScreen
 import com.habitat.app.ui.settings.SettingsViewModel
+import com.habitat.app.ui.world.WorldBuildSaveStatus
+import com.habitat.app.ui.world.WorldBuildUiState
 import com.habitat.app.ui.world.WorldScreen
 import com.habitat.app.ui.world.WorldViewModel
 import com.habitat.app.ui.theme.MonkeeTheme
@@ -49,7 +54,23 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MonkeeTheme {
-                var currentScreen by remember { mutableStateOf("home") }
+                var currentScreen by rememberSaveable { mutableStateOf("home") }
+                val worldBuildState by worldViewModel.buildModeState.collectAsStateWithLifecycle()
+
+                BackHandler(enabled = currentScreen != "home") {
+                    when (currentScreen) {
+                        "settings" -> currentScreen = "home"
+                        "world" -> when (val state = worldBuildState) {
+                            is WorldBuildUiState.Editing -> {
+                                if (state.saveStatus !is WorldBuildSaveStatus.Saving) {
+                                    worldViewModel.exitBuildMode()
+                                }
+                            }
+                            WorldBuildUiState.Inactive -> currentScreen = "home"
+                        }
+                        else -> currentScreen = "home"
+                    }
+                }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     when (currentScreen) {
