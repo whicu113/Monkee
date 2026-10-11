@@ -5,6 +5,14 @@ package com.habitat.app.domain
  * SPEC Section 1 & 4.3 & 8.1.
  */
 object GameConfig {
+    /** Maximum successful build edits retained in a single session. */
+    const val BUILD_MODE_HISTORY_LIMIT: Int = 100
+
+    /** Default first island dimensions. SPEC 7.1. */
+    const val STARTER_ISLAND_ID: String = "starter"
+    const val STARTER_ISLAND_WIDTH: Int = 8
+    const val STARTER_ISLAND_HEIGHT: Int = 8
+
     /** Default logical day boundary hour (04:00 local time). SPEC 4.3 */
     const val DEFAULT_DAY_BOUNDARY_HOUR: Int = 4
 

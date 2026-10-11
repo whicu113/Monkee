@@ -3,6 +3,7 @@ package com.habitat.app.di
 import com.habitat.app.data.repository.CompletionRepositoryImpl
 import com.habitat.app.data.repository.HabitRepositoryImpl
 import com.habitat.app.data.repository.SettingsRepositoryImpl
+import com.habitat.app.data.repository.WorldRepositoryImpl
 import com.habitat.app.data.local.RoomRewardTransactionRunner
 import com.habitat.app.domain.RewardTransactionRunner
 import com.habitat.app.domain.usecase.LogCompletionResultUseCase
@@ -10,6 +11,7 @@ import com.habitat.app.domain.usecase.LogCompletionUseCase
 import com.habitat.app.domain.repository.CompletionRepository
 import com.habitat.app.domain.repository.HabitRepository
 import com.habitat.app.domain.repository.SettingsRepository
+import com.habitat.app.domain.repository.WorldRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -49,4 +51,10 @@ abstract class RepositoryModule {
     abstract fun bindSettingsRepository(
         impl: SettingsRepositoryImpl
     ): SettingsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWorldRepository(
+        impl: WorldRepositoryImpl
+    ): WorldRepository
 }

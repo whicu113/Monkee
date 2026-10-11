@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -85,6 +86,7 @@ import kotlin.math.roundToInt
 fun HabitListScreen(
     viewModel: HabitViewModel,
     onNavigateToSettings: () -> Unit,
+    onNavigateToWorld: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -134,6 +136,13 @@ fun HabitListScreen(
                             IconButton(onClick = { showPermissionRationale = true }) {
                                 Icon(Icons.Default.Notifications, contentDescription = "Enable Notifications")
                             }
+                        }
+
+                        IconButton(onClick = onNavigateToWorld) {
+                            Icon(
+                                Icons.Default.Map,
+                                contentDescription = stringResource(R.string.world_open)
+                            )
                         }
 
                         IconButton(onClick = onNavigateToSettings) {

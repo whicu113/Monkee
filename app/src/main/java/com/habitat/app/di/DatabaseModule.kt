@@ -8,6 +8,7 @@ import com.habitat.app.data.local.DropRecordDao
 import com.habitat.app.data.local.HabitDao
 import com.habitat.app.data.local.HabitGroupDao
 import com.habitat.app.data.local.LedgerEntryDao
+import com.habitat.app.data.local.WorldDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -29,7 +30,13 @@ object DatabaseModule {
             AppDatabase::class.java,
             "habitat.db"
         )
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
+            .addMigrations(
+                AppDatabase.MIGRATION_1_2,
+                AppDatabase.MIGRATION_2_3,
+                AppDatabase.MIGRATION_3_4,
+                AppDatabase.MIGRATION_4_5,
+                AppDatabase.MIGRATION_5_6
+            )
             .build()
     }
 
@@ -56,5 +63,10 @@ object DatabaseModule {
     @Provides
     fun provideDropRecordDao(database: AppDatabase): DropRecordDao {
         return database.dropRecordDao()
+    }
+
+    @Provides
+    fun provideWorldDao(database: AppDatabase): WorldDao {
+        return database.worldDao()
     }
 }

@@ -20,6 +20,12 @@
     <string name="world_spike_draw_report">Draw report: %1$d frames · minimum %2$d / %3$d tiles in a frame</string>
     <string name="world_spike_reset_counter">Reset count</string>
     <string name="world_spike_read_counter">Read count</string>
+    <string name="world_title">World</string>
+    <string name="world_open">Open world</string>
+    <string name="world_back">Back to habits</string>
+    <string name="world_island_description">Saved island, %1$d by %2$d tiles</string>
+    <string name="world_load_error">Couldn\'t load your island. Try again.</string>
+    <string name="world_retry">Try again</string>
     <plurals name="reward_seeds_earned">
         <item quantity="one">+%1$d Seed</item>
         <item quantity="other">+%1$d Seeds</item>

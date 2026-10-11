@@ -13,9 +13,12 @@ import com.habitat.app.data.local.converters.HabitConverters
         HabitGroupEntity::class,
         CompletionEntity::class,
         LedgerEntryEntity::class,
-        DropRecordEntity::class
+        DropRecordEntity::class,
+        WorldIslandEntity::class,
+        WorldTileEntity::class,
+        WorldItemEntity::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(HabitConverters::class)
@@ -25,6 +28,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun completionDao(): CompletionDao
     abstract fun ledgerEntryDao(): LedgerEntryDao
     abstract fun dropRecordDao(): DropRecordDao
+    abstract fun worldDao(): WorldDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -68,6 +72,31 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL(
                     "CREATE UNIQUE INDEX IF NOT EXISTS `index_drop_records_habitId_logicalDate` ON `drop_records` (`habitId`, `logicalDate`)"
+                )
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `world_islands` (`id` TEXT NOT NULL, `width` INTEGER NOT NULL, `height` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `world_tiles` (`islandId` TEXT NOT NULL, `x` INTEGER NOT NULL, `y` INTEGER NOT NULL, `terrain` TEXT NOT NULL, PRIMARY KEY(`islandId`, `x`, `y`), FOREIGN KEY(`islandId`) REFERENCES `world_islands`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_world_tiles_islandId` ON `world_tiles` (`islandId`)"
+                )
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `world_items` (`id` TEXT NOT NULL, `islandId` TEXT NOT NULL, `type` TEXT NOT NULL, `x` INTEGER NOT NULL, `y` INTEGER NOT NULL, `rotation` INTEGER NOT NULL, `flipped` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`islandId`) REFERENCES `world_islands`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_world_items_islandId` ON `world_items` (`islandId`)"
                 )
             }
         }

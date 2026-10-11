@@ -23,6 +23,8 @@ import com.habitat.app.ui.habit.HabitListScreen
 import com.habitat.app.ui.habit.HabitViewModel
 import com.habitat.app.ui.settings.SettingsScreen
 import com.habitat.app.ui.settings.SettingsViewModel
+import com.habitat.app.ui.world.WorldScreen
+import com.habitat.app.ui.world.WorldViewModel
 import com.habitat.app.ui.theme.MonkeeTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -37,6 +39,7 @@ class MainActivity : ComponentActivity() {
 
     private val habitViewModel: HabitViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
+    private val worldViewModel: WorldViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,10 +60,18 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.padding(innerPadding)
                             )
                         }
+                        "world" -> {
+                            WorldScreen(
+                                viewModel = worldViewModel,
+                                onNavigateBack = { currentScreen = "home" },
+                                modifier = Modifier.padding(innerPadding)
+                            )
+                        }
                         else -> {
                             HabitListScreen(
                                 viewModel = habitViewModel,
                                 onNavigateToSettings = { currentScreen = "settings" },
+                                onNavigateToWorld = { currentScreen = "world" },
                                 modifier = Modifier.padding(innerPadding)
                             )
                         }
