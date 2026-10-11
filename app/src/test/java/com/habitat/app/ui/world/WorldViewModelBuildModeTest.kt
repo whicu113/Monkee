@@ -354,18 +354,19 @@ class WorldViewModelBuildModeTest {
             fixture.vm.enterBuildMode()
             fixture.advance()
             val first = item("first-tap", 1, 1)
-            val second = item("second-tap", 1, 1)
+            val movedAnchor = TileCoordinate(2, 1)
             fixture.repository.holdFirstSave = true
             fixture.vm.applyOperation(BuildOperation.Place(first))
             testScope.runCurrent()
             val firstEnteredSave = fixture.repository.firstSaveStarted.isCompleted
             expect(failures, "two rapid dependent taps are serialized", firstEnteredSave, "first tap did not enter the suspended repository save")
-            fixture.vm.applyOperation(BuildOperation.Place(second))
+            fixture.vm.applyOperation(BuildOperation.Move(first.id, movedAnchor))
             testScope.runCurrent()
             fixture.repository.releaseFirstSave.complete(Unit)
             testScope.advanceUntilIdle()
-            expect(failures, "two rapid dependent taps are serialized", fixture.repository.current.value.items == listOf(first), "second tap did not observe the first placement's occupied cell")
-            expect(failures, "two rapid dependent taps are serialized", fixture.repository.successfulSaves.size == 1, "dependent second tap should be rejected without a second save")
+            val persisted = fixture.repository.current.value.items.singleOrNull()
+            expect(failures, "two rapid dependent taps are serialized", persisted?.anchor == movedAnchor, "dependent move did not observe and move the first placement")
+            expect(failures, "two rapid dependent taps are serialized", fixture.repository.successfulSaves.size == 2, "dependent move should persist after the first save")
         }
     }
 
