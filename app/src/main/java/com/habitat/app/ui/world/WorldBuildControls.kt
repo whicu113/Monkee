@@ -1,15 +1,16 @@
 package com.habitat.app.ui.world
 
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -17,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.habitat.app.R
 import com.habitat.app.domain.model.BuiltInPlaceableCatalog
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun WorldBuildControls(
     editing: WorldBuildUiState.Editing,
@@ -48,8 +50,9 @@ internal fun WorldBuildControls(
         }
 
         Text(stringResource(R.string.world_build_palette_title))
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        Text(stringResource(R.string.world_build_placeholder_notice))
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             PaletteButton(
@@ -68,9 +71,10 @@ internal fun WorldBuildControls(
             )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             ToolButton(R.string.world_build_tool_place, WorldBuildTool.PLACE, editing, editable, onSelectTool)
             ToolButton(R.string.world_build_tool_move, WorldBuildTool.MOVE, editing, editable, onSelectTool)
@@ -79,9 +83,10 @@ internal fun WorldBuildControls(
             ToolButton(R.string.world_build_tool_erase, WorldBuildTool.ERASER, editing, editable, onSelectTool)
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             OutlinedButton(
                 onClick = onToggleBatchMode,
@@ -121,11 +126,14 @@ private fun PaletteButton(
     val onClick = { onSelectDefinition(definitionId) }
     if (editing.selectedDefinitionId == definitionId) {
         Button(onClick = onClick, enabled = editable, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(stringResource(label))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("✓")
+                Text(stringResource(label), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     } else {
         OutlinedButton(onClick = onClick, enabled = editable, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(stringResource(label))
+            Text(stringResource(label), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -141,7 +149,10 @@ private fun ToolButton(
     val selected = editing.activeTool == tool
     if (selected) {
         Button(onClick = { onSelectTool(tool) }, enabled = editable, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(stringResource(label))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("✓")
+                Text(stringResource(label), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     } else {
         OutlinedButton(onClick = { onSelectTool(tool) }, enabled = editable, modifier = Modifier.heightIn(min = 48.dp)) {

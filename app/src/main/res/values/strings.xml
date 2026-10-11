@@ -29,8 +29,9 @@
     <string name="world_build_enter">Build</string>
     <string name="world_build_exit">Exit Build</string>
     <string name="world_build_palette_title">Placeholder pieces</string>
-    <string name="world_build_stone_placeholder">Stone · temporary placeholder piece · no shop · no cost</string>
-    <string name="world_build_log_placeholder">Log · temporary placeholder piece · no shop · no cost</string>
+    <string name="world_build_placeholder_notice">Temporary placeholder pieces · no shop · no cost</string>
+    <string name="world_build_stone_placeholder">Stone</string>
+    <string name="world_build_log_placeholder">Log</string>
     <string name="world_build_tool_place">Place</string>
     <string name="world_build_tool_move">Move</string>
     <string name="world_build_tool_rotate">Rotate</string>
